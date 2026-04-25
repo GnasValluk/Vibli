@@ -8,17 +8,18 @@ PlaylistImporter::PlaylistImporter(YtDlpService *ytDlp,
                                    PlaylistManager *playlist,
                                    QNetworkAccessManager *nam, QObject *parent)
     : QObject(parent), m_ytDlp(ytDlp), m_playlist(playlist), m_nam(nam) {
+  connect(m_ytDlp, &YtDlpService::trackFetched, this,
+          &PlaylistImporter::onTrackFetched);
   connect(m_ytDlp, &YtDlpService::playlistMetadataReady, this,
           &PlaylistImporter::onMetadataReady);
   connect(m_ytDlp, &YtDlpService::errorOccurred, this,
           &PlaylistImporter::onYtDlpError);
 }
 
-// ── Static helpers
-// ────────────────────────────────────────────────────────────
+// ── Validation
+// ────────────────────────────────────────────────────────────────
 
 bool PlaylistImporter::isValidPlaylistUrl(const QString &url) {
-  // Chấp nhận cả youtube.com và www.youtube.com, có thể có &si=... ở cuối
   static const QRegularExpression re(
       R"(^https://(www\.)?youtube\.com/playlist\?.*list=.+)");
   return re.match(url).hasMatch();
@@ -27,26 +28,18 @@ bool PlaylistImporter::isValidPlaylistUrl(const QString &url) {
 QString PlaylistImporter::validationErrorMessage(const QString &url) {
   if (url.isEmpty())
     return "URL không được để trống.";
-
   if (!url.startsWith("https://"))
     return "URL phải bắt đầu bằng https://.";
-
   if (!url.contains("youtube.com"))
-    return "URL phải là địa chỉ YouTube (youtube.com).";
-
+    return "URL phải là địa chỉ YouTube.";
   if (!url.contains("/playlist"))
-    return "URL phải trỏ đến một playlist YouTube (/playlist).";
-
+    return "URL phải trỏ đến một playlist YouTube.";
   if (!url.contains("list="))
-    return "URL phải chứa tham số list= (ID playlist).";
-
-  // list= present but value might be empty
-  const int listIdx = url.indexOf("list=");
-  const QString listVal = url.mid(listIdx + 5).split('&').first();
-  if (listVal.isEmpty())
+    return "URL phải chứa tham số list=.";
+  const int idx = url.indexOf("list=");
+  if (url.mid(idx + 5).split('&').first().isEmpty())
     return "ID playlist (list=) không được để trống.";
-
-  return "URL playlist YouTube không hợp lệ. Định dạng đúng: "
+  return "URL không hợp lệ. Định dạng: "
          "https://www.youtube.com/playlist?list=<ID>";
 }
 
@@ -58,7 +51,7 @@ void PlaylistImporter::importPlaylist(const QString &url) {
     emit importFailed(validationErrorMessage(url));
     return;
   }
-
+  m_importedCount = 0;
   emit importStarted();
   m_ytDlp->fetchPlaylistMetadata(url);
 }
@@ -66,41 +59,42 @@ void PlaylistImporter::importPlaylist(const QString &url) {
 // ── Private slots
 // ─────────────────────────────────────────────────────────────
 
+void PlaylistImporter::onTrackFetched(const Track &track) {
+  // Thêm ngay vào playlist — UI sẽ thấy track xuất hiện dần
+  m_playlist->addTrack(track);
+  m_importedCount++;
+  emit trackImported(m_importedCount);
+
+  // Tải thumbnail song song
+  if (!track.thumbnailUrl.isEmpty())
+    downloadThumbnail(track.videoId, track.thumbnailUrl);
+}
+
 void PlaylistImporter::onMetadataReady(const QList<Track> &tracks) {
-  m_playlist->addTracks(tracks);
   emit importFinished(tracks.size());
-  downloadThumbnails(tracks);
 }
 
 void PlaylistImporter::onYtDlpError(const QString &error) {
-  emit importFailed(error);
+  // Nếu đã có một số track rồi thì không fail hoàn toàn
+  if (m_importedCount > 0)
+    emit importFinished(m_importedCount);
+  else
+    emit importFailed(error);
 }
 
-void PlaylistImporter::downloadThumbnails(const QList<Track> &tracks) {
-  for (const Track &track : tracks) {
-    if (track.thumbnailUrl.isEmpty())
-      continue;
+void PlaylistImporter::downloadThumbnail(const QString &videoId,
+                                         const QString &url) {
+  QNetworkRequest req{QUrl(url)};
+  req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                   QNetworkRequest::NoLessSafeRedirectPolicy);
+  QNetworkReply *reply = m_nam->get(req);
 
-    const QString videoId = track.videoId;
-    QNetworkRequest request(QUrl(track.thumbnailUrl));
-    QNetworkReply *reply = m_nam->get(request);
-
-    connect(reply, &QNetworkReply::finished, this, [this, reply, videoId]() {
-      reply->deleteLater();
-
-      if (reply->error() != QNetworkReply::NoError) {
-        // Silent on error – keep placeholder
-        return;
-      }
-
-      const QByteArray data = reply->readAll();
-      QPixmap pixmap;
-      if (!pixmap.loadFromData(data)) {
-        // Silent on decode error
-        return;
-      }
-
-      emit thumbnailLoaded(videoId, pixmap);
-    });
-  }
+  connect(reply, &QNetworkReply::finished, this, [this, reply, videoId]() {
+    reply->deleteLater();
+    if (reply->error() != QNetworkReply::NoError)
+      return;
+    QPixmap px;
+    if (px.loadFromData(reply->readAll()))
+      emit thumbnailLoaded(videoId, px);
+  });
 }

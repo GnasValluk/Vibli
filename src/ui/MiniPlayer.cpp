@@ -50,11 +50,10 @@ void MiniPlayer::setupUi() {
   m_thumbStack = new QStackedWidget(this);
   m_thumbStack->setFixedSize(THUMB_SIZE, THUMB_SIZE);
 
-  // Trang 0: audio art (label tối)
-  m_audioArt = new QLabel(m_thumbStack);
+  // Trang 0: audio/YouTube thumbnail — bo góc thật
+  m_audioArt = new RoundedImageWidget(10, m_thumbStack);
   m_audioArt->setFixedSize(THUMB_SIZE, THUMB_SIZE);
-  m_audioArt->setAlignment(Qt::AlignCenter);
-  m_audioArt->setText("♪");
+  m_audioArt->setPlaceholderText("♪");
   m_audioArt->setObjectName("audioArt");
 
   // Trang 1: video thumbnail – crop center, bo góc, không bóp méo
@@ -164,15 +163,8 @@ void MiniPlayer::setupUi() {
 
 void MiniPlayer::applyStyle() {
   setStyleSheet(R"(
-        QLabel#audioArt {
-            background: #2a2a2a;
-            border-radius: 10px;
-            color: #555555;
-            font-size: 24px;
-        }
         QStackedWidget {
             border-radius: 10px;
-            border: 1.5px solid rgba(255,255,255,0.12);
             background: #000000;
         }
         QLabel#titleLabel {
@@ -272,20 +264,23 @@ void MiniPlayer::onVideoAvailableChanged(bool available) {
 
 void MiniPlayer::updateTrackInfo(const Track &track) {
   m_titleLabel->setText(track.title.isEmpty() ? "Unknown title" : track.title);
-  m_artistLabel->setText(track.artist.isEmpty() ? "Unknown artist"
-                                                : track.artist);
 
-  // Show YouTube thumbnail if available
-  if (track.isYouTube && !track.thumbnail.isNull()) {
-    m_audioArt->setPixmap(track.thumbnail
-                              .scaled(THUMB_SIZE, THUMB_SIZE,
-                                      Qt::KeepAspectRatioByExpanding,
-                                      Qt::SmoothTransformation)
-                              .copy(0, 0, THUMB_SIZE, THUMB_SIZE));
-    m_audioArt->setText("");
+  if (track.isYouTube) {
+    // Hiển thị uploader thay vì artist
+    m_artistLabel->setText(track.uploader.isEmpty() ? "YouTube"
+                                                    : track.uploader);
   } else {
-    m_audioArt->setPixmap(QPixmap());
-    m_audioArt->setText("♪");
+    m_artistLabel->setText(track.artist.isEmpty() ? "Unknown artist"
+                                                  : track.artist);
+  }
+
+  // Show YouTube thumbnail nếu có — RoundedImageWidget tự xử lý crop + bo góc
+  if (track.isYouTube && !track.thumbnail.isNull()) {
+    m_audioArt->setPixmap(track.thumbnail);
+    m_thumbStack->setCurrentIndex(0);
+  } else if (!track.isYouTube) {
+    m_audioArt->clearPixmap();
+    m_audioArt->setPlaceholderText("♪");
   }
 }
 

@@ -10,8 +10,9 @@
 #include <QHBoxLayout>
 #include <QListWidgetItem>
 #include <QMessageBox>
+#include <QResizeEvent>
+#include <QTimer>
 #include <QVBoxLayout>
-
 
 // ── Định dạng hỗ trợ ─────────────────────────────────────────────────────────
 static const QSet<QString> AUDIO_EXTENSIONS = {
@@ -31,6 +32,9 @@ MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
   setupUi();
   applyStyle();
 
+  // ── Loading overlay ────────────────────────────────────────────────────
+  m_loadingOverlay = new LoadingOverlay(centralWidget());
+
   connect(m_playlist, &PlaylistManager::playlistChanged, this,
           &MainWindow::onPlaylistChanged);
   connect(m_playlist, &PlaylistManager::currentTrackChanged, this,
@@ -39,40 +43,56 @@ MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
           &MainWindow::onMetadataChanged);
 
   // ── YouTube import connections ─────────────────────────────────────────
-  connect(m_importer, &PlaylistImporter::importStarted, this,
-          [this]() { m_statusLabel->setText("Đang tải playlist..."); });
-  connect(m_importer, &PlaylistImporter::importFinished, this,
-          [this](int count) {
-            m_statusLabel->setText(
-                QString("Đã thêm %1 track từ YouTube.").arg(count));
-            onPlaylistChanged();
-          });
+  connect(m_importer, &PlaylistImporter::importStarted, this, [this]() {
+    m_loadingOverlay->start("Đang tải playlist...");
+    m_statusLabel->setText("Đang tải playlist...");
+    m_importYtBtn->setEnabled(false);
+  });
+
+  // Mỗi track load xong → cập nhật progress bar
+  connect(
+      m_importer, &PlaylistImporter::trackImported, this, [this](int loaded) {
+        m_loadingOverlay->setProgress(loaded,
+                                      -1); // indeterminate vì chưa biết total
+        m_loadingOverlay->setMessage(QString("Đã tải %1 track...").arg(loaded));
+        m_statusLabel->setText(QString("Đang tải... (%1 track)").arg(loaded));
+      });
+
+  connect(
+      m_importer, &PlaylistImporter::importFinished, this, [this](int count) {
+        m_loadingOverlay->setProgress(count, count); // 100%
+        QTimer::singleShot(600, this, [this, count]() {
+          m_loadingOverlay->stop();
+          m_importYtBtn->setEnabled(true);
+          m_statusLabel->setText(QString("%1 items").arg(m_playlist->count()));
+        });
+      });
   connect(m_importer, &PlaylistImporter::importFailed, this,
           [this](const QString &reason) {
+            m_loadingOverlay->stop();
+            m_importYtBtn->setEnabled(true);
             m_statusLabel->setText("Lỗi import.");
             QMessageBox::critical(this, "Lỗi Import YouTube", reason);
+          });
+
+  // Cập nhật message khi yt-dlp báo tiến trình
+  connect(m_ytDlpService, &YtDlpService::progressUpdated, this,
+          [this](const QString &msg) {
+            if (m_loadingOverlay->isVisible())
+              m_loadingOverlay->setMessage(msg);
           });
   connect(m_importer, &PlaylistImporter::thumbnailLoaded, this,
           &MainWindow::onThumbnailLoaded);
 
-  // ── AudioPlayer error → retry for YouTube tracks ───────────────────────
+  // ── AudioPlayer error → chỉ log, không hiện dialog cho YouTube ──────────
   connect(m_player, &AudioPlayer::errorOccurred, this,
           [this](const QString &errorMsg) {
             const Track current = m_playlist->currentTrack();
-            if (!current.isYouTube)
-              return;
-
-            QMessageBox msgBox(this);
-            msgBox.setWindowTitle("Lỗi phát YouTube");
-            msgBox.setText("Không thể phát track YouTube: " + current.title);
-            msgBox.setInformativeText(errorMsg);
-            QPushButton *retryBtn =
-                msgBox.addButton("Thử lại", QMessageBox::AcceptRole);
-            msgBox.addButton("Bỏ qua", QMessageBox::RejectRole);
-            msgBox.exec();
-
-            if (msgBox.clickedButton() == retryBtn) {
-              onRetryYouTubeTrack();
+            if (current.isYouTube) {
+              // Hiện lỗi ở status bar, không dùng dialog modal
+              m_statusLabel->setText("⚠ Lỗi phát: " + errorMsg.left(80));
+              qWarning("YouTube playback error: %s",
+                       errorMsg.toUtf8().constData());
             }
           });
 }
@@ -80,6 +100,12 @@ MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
 void MainWindow::closeEvent(QCloseEvent *event) {
   hide();
   event->ignore();
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event) {
+  QMainWindow::resizeEvent(event);
+  if (m_loadingOverlay)
+    m_loadingOverlay->resize(centralWidget()->size());
 }
 
 // ── Setup UI
@@ -98,7 +124,9 @@ void MainWindow::setupUi() {
   m_playlistView = new QListWidget(central);
   m_playlistView->setObjectName("playlistView");
   m_playlistView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-  m_playlistView->setIconSize(QSize(48, 48));
+  m_playlistView->setIconSize(QSize(56, 56));
+  m_playlistView->setWordWrap(true);          // cho phép text xuống dòng
+  m_playlistView->setUniformItemSizes(false); // cho phép item cao khác nhau
 
   // Buttons
   m_addFolderBtn = new QPushButton("  Add Folder", central);
@@ -176,9 +204,9 @@ void MainWindow::applyStyle() {
             outline: none;
         }
         QListWidget#playlistView::item {
-            padding: 5px 10px;
+            padding: 4px 8px;
             border-bottom: 1px solid #222222;
-            min-height: 52px;
+            min-height: 60px;
         }
         QListWidget#playlistView::item:selected {
             background: #1db954;
@@ -216,6 +244,25 @@ QString MainWindow::formatDuration(qint64 ms) const {
     return "0:00";
   const qint64 s = ms / 1000;
   return QString("%1:%2").arg(s / 60).arg(s % 60, 2, 10, QChar('0'));
+}
+
+QString MainWindow::buildYouTubeTooltip(const Track &t) const {
+  QStringList lines;
+  lines << "<b>" + t.title.toHtmlEscaped() + "</b>";
+  if (!t.uploader.isEmpty())
+    lines << "📺 " + t.uploader.toHtmlEscaped();
+  if (t.durationMs > 0)
+    lines << "⏱ " + formatDuration(t.durationMs);
+  if (t.viewCount > 0)
+    lines << "👁 " + QString::number(t.viewCount) + " views";
+  if (t.likeCount > 0)
+    lines << "👍 " + QString::number(t.likeCount) + " likes";
+  if (!t.uploadDate.isEmpty() && t.uploadDate.length() == 8)
+    lines << "📅 " + t.uploadDate.mid(0, 4) + "-" + t.uploadDate.mid(4, 2) +
+                 "-" + t.uploadDate.mid(6, 2);
+  if (!t.description.isEmpty())
+    lines << "<hr>" + t.description.toHtmlEscaped().replace("\n", "<br>");
+  return lines.join("<br>");
 }
 
 // ── Scan folder đệ quy
@@ -308,7 +355,8 @@ void MainWindow::onPlaylistChanged() {
       IconFont::icon(IconFont::MUSIC_NOTE, 14, QColor(150, 150, 150));
   const QIcon videoIcon =
       IconFont::icon(IconFont::MOVIE, 14, QColor(150, 150, 150));
-  const QIcon ytIcon =
+  // Placeholder YouTube icon (đỏ) khi chưa có thumbnail
+  const QIcon ytPlaceholder =
       IconFont::icon(IconFont::PLAY_ARROW, 14, QColor(255, 80, 80));
 
   const QList<Track> &tracks = m_playlist->tracks();
@@ -319,24 +367,41 @@ void MainWindow::onPlaylistChanged() {
     QIcon icon;
 
     if (t.isYouTube) {
-      icon = ytIcon;
+      // Dòng 1: title
+      // Dòng 2: uploader · duration · view count
       const QString dur = formatDuration(t.durationMs);
-      display = "[YT] " + t.title + "  (" + dur + ")";
+      QString sub;
+      if (!t.uploader.isEmpty())
+        sub += t.uploader;
+      if (!dur.isEmpty() && dur != "0:00") {
+        if (!sub.isEmpty())
+          sub += "  ·  ";
+        sub += dur;
+      }
+      if (t.viewCount > 0) {
+        if (!sub.isEmpty())
+          sub += "  ·  ";
+        if (t.viewCount >= 1000000)
+          sub += QString::number(t.viewCount / 1000000) + "M views";
+        else if (t.viewCount >= 1000)
+          sub += QString::number(t.viewCount / 1000) + "K views";
+        else
+          sub += QString::number(t.viewCount) + " views";
+      }
+      display = t.title + (sub.isEmpty() ? "" : "\n" + sub);
+      icon = t.thumbnail.isNull()
+                 ? ytPlaceholder
+                 : QIcon(t.thumbnail.scaled(48, 48, Qt::KeepAspectRatio,
+                                            Qt::SmoothTransformation));
     } else {
       icon = t.isVideo ? videoIcon : audioIcon;
       display = t.artist.isEmpty() ? t.title : t.artist + " – " + t.title;
     }
 
     auto *item = new QListWidgetItem(icon, display);
-    item->setData(Qt::UserRole,
-                  t.videoId); // store videoId for thumbnail lookup
-
-    // Show thumbnail if available
-    if (t.isYouTube && !t.thumbnail.isNull()) {
-      item->setIcon(QIcon(t.thumbnail.scaled(48, 48, Qt::KeepAspectRatio,
-                                             Qt::SmoothTransformation)));
-    }
-
+    item->setData(Qt::UserRole, t.videoId); // videoId để tra cứu thumbnail
+    if (t.isYouTube)
+      item->setToolTip(buildYouTubeTooltip(t));
     m_playlistView->addItem(item);
   }
 
@@ -351,7 +416,9 @@ void MainWindow::onCurrentTrackChanged(int index, const Track &track) {
 
   QString display;
   if (track.isYouTube) {
-    display = "▶  [YT] " + track.title;
+    display = "▶  " + track.title;
+    if (!track.uploader.isEmpty())
+      display += "  —  " + track.uploader;
   } else {
     display = track.artist.isEmpty() ? track.title
                                      : track.artist + " – " + track.title;
@@ -388,12 +455,20 @@ void MainWindow::onMetadataChanged(const QString &title, const QString &artist,
 
 void MainWindow::onThumbnailLoaded(const QString &videoId,
                                    const QPixmap &pixmap) {
-  // Find the list item with matching videoId and update its icon
   for (int i = 0; i < m_playlistView->count(); ++i) {
     QListWidgetItem *item = m_playlistView->item(i);
     if (item && item->data(Qt::UserRole).toString() == videoId) {
       item->setIcon(QIcon(pixmap.scaled(48, 48, Qt::KeepAspectRatio,
                                         Qt::SmoothTransformation)));
+      // Cập nhật thumbnail trong Track để MiniPlayer cũng nhận được
+      const QList<Track> &tracks = m_playlist->tracks();
+      for (int j = 0; j < tracks.size(); ++j) {
+        if (tracks.at(j).videoId == videoId) {
+          // PlaylistManager không expose setter nên update qua signal
+          // MiniPlayer sẽ nhận thumbnail khi currentTrackChanged
+          break;
+        }
+      }
       break;
     }
   }

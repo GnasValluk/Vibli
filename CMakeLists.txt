@@ -31,6 +31,7 @@ set(SOURCES
     src/ui/MainWindow.cpp
     src/ui/VideoThumbnail.cpp
     src/ui/PlaylistImportDialog.cpp
+    src/ui/LoadingOverlay.cpp
     src/tray/TrayManager.cpp
 )
 
@@ -46,6 +47,8 @@ set(HEADERS
     src/ui/VideoThumbnail.h
     src/ui/IconFont.h
     src/ui/PlaylistImportDialog.h
+    src/ui/LoadingOverlay.h
+    src/ui/RoundedImageWidget.h
     src/tray/TrayManager.h
 )
 

@@ -6,7 +6,6 @@
 #include <QString>
 #include <QUrl>
 
-
 /**
  * @brief Track – thông tin một track (audio hoặc video) trong playlist.
  */
@@ -24,6 +23,12 @@ struct Track {
   QString videoId;        // YouTube video ID (e.g. "dQw4w9WgXcQ")
   QString thumbnailUrl;   // URL thumbnail từ yt-dlp
   QPixmap thumbnail;      // ảnh đã tải (in-memory, không serialize)
+  QString uploader;       // Tên kênh / tác giả
+  QString description;    // Mô tả video (200 ký tự đầu)
+  qint64 viewCount = 0;   // Lượt xem
+  qint64 likeCount = 0;   // Lượt thích
+  QString uploadDate;     // Ngày đăng (YYYYMMDD)
+  QString webpageUrl;     // URL trang video đầy đủ
 };
 
 /**
@@ -52,6 +57,7 @@ public:
   int count() const;
   Track trackAt(int index) const;
   QList<Track> tracks() const;
+  void updateTrackThumbnail(const QString &videoId, const QPixmap &pixmap);
 
   // ── Navigation ────────────────────────────────────────────────────────
   int currentIndex() const;

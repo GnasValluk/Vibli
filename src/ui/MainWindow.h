@@ -6,12 +6,11 @@
 #include <QNetworkAccessManager>
 #include <QPushButton>
 
-
 #include "../core/AudioPlayer.h"
 #include "../core/PlaylistImporter.h"
 #include "../core/PlaylistManager.h"
 #include "../core/YtDlpService.h"
-
+#include "LoadingOverlay.h"
 
 /**
  * @brief MainWindow – cửa sổ quản lý playlist.
@@ -32,6 +31,7 @@ public:
 
 protected:
   void closeEvent(QCloseEvent *event) override;
+  void resizeEvent(QResizeEvent *event) override;
 
 private slots:
   void onAddFolder();
@@ -51,6 +51,7 @@ private:
   void applyStyle();
   void scanFolder(const QString &folderPath, QList<Track> &tracks);
   QString formatDuration(qint64 ms) const;
+  QString buildYouTubeTooltip(const Track &t) const;
 
   AudioPlayer *m_player;
   PlaylistManager *m_playlist;
@@ -64,4 +65,5 @@ private:
   QPushButton *m_importYtBtn;
   QLabel *m_statusLabel;
   QLabel *m_nowPlayingLabel;
+  LoadingOverlay *m_loadingOverlay = nullptr;
 };

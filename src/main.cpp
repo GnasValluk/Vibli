@@ -69,15 +69,23 @@ int main(int argc, char *argv[]) {
                      audioPlayer->play(url);
                    });
 
-  // Khi YtDlpService lỗi stream → bỏ qua track, chuyển next
-  QObject::connect(ytDlpService, &YtDlpService::errorOccurred, playlistMgr,
-                   [playlistMgr, audioPlayer](const QString &msg) {
-                     qWarning("YtDlpService error: %s",
+  // Thumbnail loaded → cập nhật vào PlaylistManager để MiniPlayer nhận được
+  QObject::connect(
+      importer, &PlaylistImporter::thumbnailLoaded, playlistMgr,
+      [playlistMgr](const QString &videoId, const QPixmap &pixmap) {
+        playlistMgr->updateTrackThumbnail(videoId, pixmap);
+      });
+
+  // Khi YtDlpService lỗi stream → bỏ qua track, chuyển next (có guard)
+  QObject::connect(ytDlpService, &YtDlpService::streamErrorOccurred, &app,
+                   [playlistMgr](const QString &videoId, const QString &msg) {
+                     qWarning("Stream error [%s]: %s",
+                              videoId.toUtf8().constData(),
                               msg.toUtf8().constData());
-                     // Chuyển sang track tiếp theo nếu có
-                     if (playlistMgr->hasNext()) {
+                     // Chỉ skip nếu track lỗi đúng là track đang phát
+                     if (playlistMgr->currentTrack().videoId == videoId &&
+                         playlistMgr->hasNext()) {
                        playlistMgr->next();
-                       // currentTrackChanged sẽ trigger coordinator ở trên
                      }
                    });
 

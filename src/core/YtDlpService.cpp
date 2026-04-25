@@ -6,12 +6,13 @@
 #include <QJsonDocument>
 #include <QJsonValue>
 
-
 static constexpr int STREAM_TIMEOUT_MS = 30000;
 
 YtDlpService::YtDlpService(QObject *parent) : QObject(parent) {
   // ── Metadata process ──────────────────────────────────────────────────
   m_metadataProcess = new QProcess(this);
+  connect(m_metadataProcess, &QProcess::readyReadStandardOutput, this,
+          &YtDlpService::onMetadataReadyRead);
   connect(m_metadataProcess,
           QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
           &YtDlpService::onMetadataProcessFinished);
@@ -44,20 +45,25 @@ bool YtDlpService::isAvailable() { return QFileInfo::exists(ytDlpPath()); }
 
 void YtDlpService::fetchPlaylistMetadata(const QString &playlistUrl) {
   if (!isAvailable()) {
-    emit errorOccurred(QString(
-        "Khong tim thay yt-dlp.exe. Vui long kiem tra thu muc yt_dlp/"));
+    emit errorOccurred(
+        "Khong tim thay yt-dlp.exe. Vui long kiem tra thu muc yt_dlp/");
     return;
   }
-
   if (m_metadataProcess->state() != QProcess::NotRunning) {
     m_metadataProcess->kill();
     m_metadataProcess->waitForFinished(1000);
   }
-
-  emit progressUpdated(QString("Dang tai metadata playlist..."));
+  m_metadataBuffer.clear();
+  m_fetchedTracks.clear();
+  m_fetchedCount = 0;
+  emit progressUpdated("Đang tải playlist...");
+  emit fetchProgress(0, -1);
 
   QStringList args;
-  args << "--flat-playlist" << "--dump-json" << playlistUrl;
+  args << "--dump-json"
+       << "--no-warnings"
+       << "--ffmpeg-location"
+       << (QCoreApplication::applicationDirPath() + "/yt_dlp") << playlistUrl;
   m_metadataProcess->start(ytDlpPath(), args);
 }
 
@@ -96,31 +102,6 @@ void YtDlpService::invalidateStreamCache(const QString &videoId) {
 // ── Parser
 // ────────────────────────────────────────────────────────────────────
 
-QList<Track>
-YtDlpService::parsePlaylistOutput(const QByteArray &jsonLines) const {
-  QList<Track> tracks;
-  const QList<QByteArray> lines = jsonLines.split('\n');
-  for (const QByteArray &line : lines) {
-    const QByteArray trimmed = line.trimmed();
-    if (trimmed.isEmpty())
-      continue;
-
-    QJsonParseError err;
-    const QJsonDocument doc = QJsonDocument::fromJson(trimmed, &err);
-    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-      qWarning("YtDlpService: failed to parse JSON line: %s",
-               err.errorString().toUtf8().constData());
-      continue;
-    }
-
-    auto track = parseVideoJson(doc.object());
-    if (track.has_value()) {
-      tracks.append(track.value());
-    }
-  }
-  return tracks;
-}
-
 std::optional<Track>
 YtDlpService::parseVideoJson(const QJsonObject &obj) const {
   const QString id = obj.value("id").toString();
@@ -135,14 +116,50 @@ YtDlpService::parseVideoJson(const QJsonObject &obj) const {
   t.isYouTube = true;
   t.videoId = id;
   t.title = title;
-  t.thumbnailUrl = obj.value("thumbnail").toString();
+  t.webpageUrl = obj.value("webpage_url").toString();
+  if (t.webpageUrl.isEmpty())
+    t.webpageUrl = "https://www.youtube.com/watch?v=" + id;
 
-  // duration may be null or absent -> durationMs = 0
+  // ── Uploader / channel ────────────────────────────────────────────────
+  t.uploader = obj.value("uploader").toString();
+  if (t.uploader.isEmpty())
+    t.uploader = obj.value("channel").toString();
+  t.artist = t.uploader; // dùng chung field artist
+
+  // ── Duration ──────────────────────────────────────────────────────────
   const QJsonValue durVal = obj.value("duration");
-  if (durVal.isDouble()) {
-    t.durationMs = static_cast<qint64>(durVal.toDouble() * 1000.0);
+  t.durationMs =
+      durVal.isDouble() ? static_cast<qint64>(durVal.toDouble() * 1000.0) : 0;
+
+  // ── Stats ─────────────────────────────────────────────────────────────
+  t.viewCount = static_cast<qint64>(obj.value("view_count").toDouble(0));
+  t.likeCount = static_cast<qint64>(obj.value("like_count").toDouble(0));
+  t.uploadDate = obj.value("upload_date").toString();
+
+  // ── Description (200 ký tự đầu) ──────────────────────────────────────
+  t.description = obj.value("description").toString().left(200);
+
+  // ── Thumbnail – chọn ảnh rộng nhất từ mảng thumbnails[] ──────────────
+  const QJsonArray thumbs = obj.value("thumbnails").toArray();
+  if (!thumbs.isEmpty()) {
+    QString bestUrl;
+    int bestWidth = 0;
+    for (const QJsonValue &tv : thumbs) {
+      const QJsonObject to = tv.toObject();
+      const QString tUrl = to.value("url").toString();
+      if (tUrl.isEmpty())
+        continue;
+      const int w = to.value("width").toInt(0);
+      if (w > bestWidth) {
+        bestWidth = w;
+        bestUrl = tUrl;
+      }
+    }
+    t.thumbnailUrl = bestUrl.isEmpty()
+                         ? thumbs.last().toObject().value("url").toString()
+                         : bestUrl;
   } else {
-    t.durationMs = 0;
+    t.thumbnailUrl = obj.value("thumbnail").toString();
   }
 
   return t;
@@ -151,37 +168,76 @@ YtDlpService::parseVideoJson(const QJsonObject &obj) const {
 // ── Private slots
 // ─────────────────────────────────────────────────────────────
 
+void YtDlpService::onMetadataReadyRead() {
+  // Đọc output mới, ghép vào buffer
+  m_metadataBuffer += m_metadataProcess->readAllStandardOutput();
+
+  // Tách từng dòng hoàn chỉnh (kết thúc bằng \n)
+  int newlinePos;
+  while ((newlinePos = m_metadataBuffer.indexOf('\n')) != -1) {
+    const QByteArray line = m_metadataBuffer.left(newlinePos).trimmed();
+    m_metadataBuffer.remove(0, newlinePos + 1);
+
+    if (line.isEmpty())
+      continue;
+
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(line, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject())
+      continue;
+
+    auto track = parseVideoJson(doc.object());
+    if (!track.has_value())
+      continue;
+
+    m_fetchedCount++;
+    m_fetchedTracks.append(track.value());
+
+    // Emit ngay để UI hiển thị dần
+    emit trackFetched(track.value());
+    emit fetchProgress(m_fetchedCount, -1); // total chưa biết
+  }
+}
+
 void YtDlpService::onMetadataProcessFinished(int exitCode,
                                              QProcess::ExitStatus /*status*/) {
+  // Xử lý phần còn lại trong buffer (dòng cuối không có \n)
+  if (!m_metadataBuffer.trimmed().isEmpty()) {
+    QJsonParseError err;
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(m_metadataBuffer.trimmed(), &err);
+    if (err.error == QJsonParseError::NoError && doc.isObject()) {
+      auto track = parseVideoJson(doc.object());
+      if (track.has_value()) {
+        m_fetchedCount++;
+        m_fetchedTracks.append(track.value());
+        emit trackFetched(track.value());
+      }
+    }
+    m_metadataBuffer.clear();
+  }
+
   if (exitCode != 0) {
     const QString errOutput =
         QString::fromUtf8(m_metadataProcess->readAllStandardError());
-    if (errOutput.contains("private") || errOutput.contains("unavailable")) {
-      emit errorOccurred(
-          QString("Playlist khong kha dung hoac o che do rieng tu: ") +
-          errOutput);
+    if (m_fetchedCount > 0) {
+      // Có một số track rồi, vẫn emit kết quả
+      emit fetchProgress(m_fetchedCount, m_fetchedCount);
+      emit playlistMetadataReady(m_fetchedTracks);
     } else {
-      emit errorOccurred(QString("yt-dlp tra ve loi (exit ") +
-                         QString::number(exitCode) + QString("): ") +
-                         errOutput);
+      emit errorOccurred("yt-dlp lỗi (exit " + QString::number(exitCode) +
+                         "): " + errOutput);
     }
     return;
   }
 
-  const QByteArray output = m_metadataProcess->readAllStandardOutput();
-  if (output.trimmed().isEmpty()) {
-    emit errorOccurred(
-        QString("Playlist khong co video nao hoac khong the truy cap."));
+  if (m_fetchedCount == 0) {
+    emit errorOccurred("Playlist không có video nào hoặc không thể truy cập.");
     return;
   }
 
-  const QList<Track> tracks = parsePlaylistOutput(output);
-  if (tracks.isEmpty()) {
-    emit errorOccurred(QString("Khong parse duoc video nao tu playlist."));
-    return;
-  }
-
-  emit playlistMetadataReady(tracks);
+  emit fetchProgress(m_fetchedCount, m_fetchedCount);
+  emit playlistMetadataReady(m_fetchedTracks);
 }
 
 void YtDlpService::onStreamProcessFinished(int exitCode,
@@ -191,7 +247,8 @@ void YtDlpService::onStreamProcessFinished(int exitCode,
   if (exitCode != 0) {
     const QString errOutput =
         QString::fromUtf8(m_streamProcess->readAllStandardError());
-    emit errorOccurred(QString("Khong lay duoc stream URL: ") + errOutput);
+    emit streamErrorOccurred(m_pendingVideoId,
+                             "Không lấy được stream URL: " + errOutput);
     return;
   }
 
@@ -199,8 +256,7 @@ void YtDlpService::onStreamProcessFinished(int exitCode,
       QString::fromUtf8(m_streamProcess->readAllStandardOutput()).trimmed();
 
   if (url.isEmpty()) {
-    emit errorOccurred(QString("yt-dlp tra ve stream URL rong cho video: ") +
-                       m_pendingVideoId);
+    emit streamErrorOccurred(m_pendingVideoId, "yt-dlp trả về stream URL rỗng");
     return;
   }
 
@@ -210,9 +266,7 @@ void YtDlpService::onStreamProcessFinished(int exitCode,
 }
 
 void YtDlpService::onStreamProcessTimeout() {
-  if (m_streamProcess->state() != QProcess::NotRunning) {
+  if (m_streamProcess->state() != QProcess::NotRunning)
     m_streamProcess->kill();
-  }
-  emit errorOccurred(QString("Timeout 30s khi lay stream URL cho video: ") +
-                     m_pendingVideoId);
+  emit streamErrorOccurred(m_pendingVideoId, "Timeout 30s khi lấy stream URL");
 }
