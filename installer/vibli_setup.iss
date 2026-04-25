@@ -1,0 +1,96 @@
+; ── VIBLI Installer Script ───────────────────────────────────────────────────
+; Yêu cầu: Inno Setup 6.x  https://jrsoftware.org/isdl.php
+; Cách dùng: Mở file này bằng Inno Setup Compiler → Build → ra file VIBLI_Setup.exe
+
+#define AppName      "VIBLI"
+#define AppVersion   "1.0.0"
+#define AppPublisher "VIBLI"
+#define AppExeName   "VIBLI.exe"
+#define DeployDir    "..\deploy"
+
+[Setup]
+AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}
+AppName={#AppName}
+AppVersion={#AppVersion}
+AppPublisher={#AppPublisher}
+AppPublisherURL=https://github.com/your-repo/vibli
+DefaultDirName={autopf}\{#AppName}
+DefaultGroupName={#AppName}
+AllowNoIcons=yes
+OutputDir=..\dist
+OutputBaseFilename=VIBLI_Setup_{#AppVersion}
+SetupIconFile=
+Compression=lzma2/ultra64
+SolidCompression=yes
+WizardStyle=modern
+PrivilegesRequired=lowest
+ArchitecturesInstallIn64BitMode=x64compatible
+
+; Hiện license nếu có
+; LicenseFile=..\LICENSE
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "desktopicon";    Description: "Create a &desktop shortcut";    GroupDescription: "Additional icons:"
+Name: "startupicon";    Description: "Run VIBLI on &Windows startup"; GroupDescription: "Additional icons:"; Flags: unchecked
+
+[Files]
+; Executable chính
+Source: "{#DeployDir}\VIBLI.exe";                    DestDir: "{app}"; Flags: ignoreversion
+
+; Qt core DLLs
+Source: "{#DeployDir}\Qt6Core.dll";                  DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\Qt6Gui.dll";                   DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\Qt6Widgets.dll";               DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\Qt6Multimedia.dll";            DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\Qt6MultimediaWidgets.dll";     DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\Qt6Network.dll";               DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\Qt6Svg.dll";                   DestDir: "{app}"; Flags: ignoreversion
+
+; FFmpeg DLLs (dùng cho multimedia)
+Source: "{#DeployDir}\avcodec-61.dll";               DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\avformat-61.dll";              DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\avutil-59.dll";                DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\swresample-5.dll";             DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\swscale-8.dll";                DestDir: "{app}"; Flags: ignoreversion
+
+; MinGW runtime
+Source: "{#DeployDir}\libgcc_s_seh-1.dll";           DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\libstdc++-6.dll";              DestDir: "{app}"; Flags: ignoreversion
+Source: "{#DeployDir}\libwinpthread-1.dll";          DestDir: "{app}"; Flags: ignoreversion
+
+; OpenGL
+Source: "{#DeployDir}\opengl32sw.dll";               DestDir: "{app}"; Flags: ignoreversion
+
+; Qt plugins
+Source: "{#DeployDir}\platforms\*";                  DestDir: "{app}\platforms";          Flags: ignoreversion recursesubdirs
+Source: "{#DeployDir}\multimedia\*";                 DestDir: "{app}\multimedia";         Flags: ignoreversion recursesubdirs
+Source: "{#DeployDir}\imageformats\*";               DestDir: "{app}\imageformats";       Flags: ignoreversion recursesubdirs
+Source: "{#DeployDir}\iconengines\*";                DestDir: "{app}\iconengines";        Flags: ignoreversion recursesubdirs
+Source: "{#DeployDir}\styles\*";                     DestDir: "{app}\styles";             Flags: ignoreversion recursesubdirs
+Source: "{#DeployDir}\generic\*";                    DestDir: "{app}\generic";            Flags: ignoreversion recursesubdirs
+Source: "{#DeployDir}\networkinformation\*";         DestDir: "{app}\networkinformation"; Flags: ignoreversion recursesubdirs
+Source: "{#DeployDir}\tls\*";                        DestDir: "{app}\tls";                Flags: ignoreversion recursesubdirs
+
+[Icons]
+; Start Menu
+Name: "{group}\{#AppName}";           Filename: "{app}\{#AppExeName}"
+Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
+
+; Desktop shortcut (nếu chọn)
+Name: "{autodesktop}\{#AppName}";     Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+
+; Startup (nếu chọn)
+Name: "{autostartup}\{#AppName}";     Filename: "{app}\{#AppExeName}"; Tasks: startupicon
+
+[Run]
+; Chạy app sau khi cài xong
+Filename: "{app}\{#AppExeName}"; \
+    Description: "Launch {#AppName}"; \
+    Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+; Xóa thư mục nếu còn sót file khi uninstall
+Type: filesandordirs; Name: "{app}"

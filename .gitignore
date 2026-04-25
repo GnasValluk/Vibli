@@ -1,0 +1,27 @@
+# Build
+build/
+deploy/
+dist/
+
+# Qt generated
+*.autogen/
+
+# Compiled
+*.exe
+*.obj
+*.o
+*.a
+*.dll
+
+# IDE
+.vscode/
+.kiro/
+.cache/
+*.user
+
+# Font (quá lớn để commit, copy bởi CMake)
+resources/fonts/
+
+# Misc
+compile_commands.json
+*.log
