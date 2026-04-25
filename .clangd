@@ -1,2 +1,9 @@
 CompileFlags:
   CompilationDatabase: build
+  # Khi header không có trong compile_commands, dùng flags này làm fallback
+  Add:
+    - --target=x86_64-w64-mingw32
+    - -std=gnu++17
+
+Diagnostics:
+  UnusedIncludes: None

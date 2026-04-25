@@ -6,7 +6,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QString>
-
+#include <qdebug.h>
 
 /**
  * @brief IconFont – Material Symbols Rounded dùng codepoint trực tiếp.
