@@ -32,6 +32,7 @@ set(SOURCES
     src/ui/VideoThumbnail.cpp
     src/ui/PlaylistImportDialog.cpp
     src/ui/LoadingOverlay.cpp
+    src/ui/LogViewerDialog.cpp
     src/tray/TrayManager.cpp
 )
 
@@ -41,6 +42,7 @@ set(HEADERS
     src/core/YtDlpService.h
     src/core/PlaylistImporter.h
     src/core/PlaylistPersistence.h
+    src/core/LogService.h
     src/ui/OverlayWidget.h
     src/ui/MiniPlayer.h
     src/ui/MainWindow.h
@@ -49,6 +51,7 @@ set(HEADERS
     src/ui/PlaylistImportDialog.h
     src/ui/LoadingOverlay.h
     src/ui/RoundedImageWidget.h
+    src/ui/LogViewerDialog.h
     src/tray/TrayManager.h
 )
 

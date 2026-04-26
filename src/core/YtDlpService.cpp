@@ -1,4 +1,5 @@
 #include "YtDlpService.h"
+#include "LogService.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -45,6 +46,7 @@ bool YtDlpService::isAvailable() { return QFileInfo::exists(ytDlpPath()); }
 
 void YtDlpService::fetchPlaylistMetadata(const QString &playlistUrl) {
   if (!isAvailable()) {
+    VLOG_ERROR("YtDlpService", "Không tìm thấy yt-dlp.exe tại: " + ytDlpPath());
     emit errorOccurred(
         "Khong tim thay yt-dlp.exe. Vui long kiem tra thu muc yt_dlp/");
     return;
@@ -56,6 +58,7 @@ void YtDlpService::fetchPlaylistMetadata(const QString &playlistUrl) {
   m_metadataBuffer.clear();
   m_fetchedTracks.clear();
   m_fetchedCount = 0;
+  VLOG_INFO("YtDlpService", "Bắt đầu fetch playlist: " + playlistUrl);
   emit progressUpdated("Đang tải playlist...");
   emit fetchProgress(0, -1);
 
@@ -68,24 +71,22 @@ void YtDlpService::fetchPlaylistMetadata(const QString &playlistUrl) {
 }
 
 void YtDlpService::resolveStreamUrl(const QString &videoId) {
-  // Check cache first
   if (m_streamCache.contains(videoId)) {
+    VLOG_DEBUG("YtDlpService", "Cache hit cho videoId: " + videoId);
     emit streamUrlReady(videoId, m_streamCache.value(videoId));
     return;
   }
-
   if (!isAvailable()) {
-    emit errorOccurred(QString(
-        "Khong tim thay yt-dlp.exe. Vui long kiem tra thu muc yt_dlp/"));
+    VLOG_ERROR("YtDlpService", "Không tìm thấy yt-dlp.exe");
+    emit streamErrorOccurred(videoId, "Không tìm thấy yt-dlp.exe");
     return;
   }
-
   if (m_streamProcess->state() != QProcess::NotRunning) {
     m_streamProcess->kill();
     m_streamProcess->waitForFinished(1000);
   }
-
   m_pendingVideoId = videoId;
+  VLOG_INFO("YtDlpService", "Đang lấy stream URL cho: " + videoId);
 
   const QString videoUrl = "https://www.youtube.com/watch?v=" + videoId;
   QStringList args;
@@ -237,6 +238,8 @@ void YtDlpService::onMetadataProcessFinished(int exitCode,
   }
 
   emit fetchProgress(m_fetchedCount, m_fetchedCount);
+  VLOG_INFO("YtDlpService",
+            QString("Fetch xong playlist: %1 track").arg(m_fetchedCount));
   emit playlistMetadataReady(m_fetchedTracks);
 }
 
@@ -247,6 +250,8 @@ void YtDlpService::onStreamProcessFinished(int exitCode,
   if (exitCode != 0) {
     const QString errOutput =
         QString::fromUtf8(m_streamProcess->readAllStandardError());
+    VLOG_ERROR("YtDlpService",
+               "Stream lỗi [" + m_pendingVideoId + "]: " + errOutput.trimmed());
     emit streamErrorOccurred(m_pendingVideoId,
                              "Không lấy được stream URL: " + errOutput);
     return;
@@ -256,17 +261,21 @@ void YtDlpService::onStreamProcessFinished(int exitCode,
       QString::fromUtf8(m_streamProcess->readAllStandardOutput()).trimmed();
 
   if (url.isEmpty()) {
+    VLOG_ERROR("YtDlpService", "Stream URL rỗng cho: " + m_pendingVideoId);
     emit streamErrorOccurred(m_pendingVideoId, "yt-dlp trả về stream URL rỗng");
     return;
   }
 
   const QUrl streamUrl(url);
   m_streamCache.insert(m_pendingVideoId, streamUrl);
+  VLOG_INFO("YtDlpService", "Stream URL OK cho: " + m_pendingVideoId);
   emit streamUrlReady(m_pendingVideoId, streamUrl);
 }
 
 void YtDlpService::onStreamProcessTimeout() {
   if (m_streamProcess->state() != QProcess::NotRunning)
     m_streamProcess->kill();
+  VLOG_WARN("YtDlpService",
+            "Timeout 30s khi lấy stream URL cho: " + m_pendingVideoId);
   emit streamErrorOccurred(m_pendingVideoId, "Timeout 30s khi lấy stream URL");
 }

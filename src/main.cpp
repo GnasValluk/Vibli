@@ -3,6 +3,7 @@
 #include <QStyleFactory>
 
 #include "core/AudioPlayer.h"
+#include "core/LogService.h"
 #include "core/PlaylistImporter.h"
 #include "core/PlaylistManager.h"
 #include "core/PlaylistPersistence.h"
@@ -28,6 +29,8 @@ int main(int argc, char *argv[]) {
   // Load icon font
   IconFont::init();
 
+  VLOG_INFO("App", "VIBLI khởi động – version 1.0.0");
+
   // Không thoát khi đóng cửa sổ cuối – ứng dụng chạy nền qua tray
   app.setQuitOnLastWindowClosed(false);
 
@@ -52,6 +55,10 @@ int main(int argc, char *argv[]) {
   auto *trayManager = new TrayManager(&app);
 
   // ── Coordinator: phát YouTube track ──────────────────────────────────
+  // Auto-recovery map: track số lần retry per videoId
+  using RetryMap = QMap<QString, int>;
+  auto *retryCount = new RetryMap();
+
   // Khi currentTrackChanged: nếu isYouTube → resolveStreamUrl; nếu local → play
   // trực tiếp
   QObject::connect(playlistMgr, &PlaylistManager::currentTrackChanged, &app,
@@ -63,11 +70,13 @@ int main(int argc, char *argv[]) {
                      }
                    });
 
-  // Khi streamUrlReady → phát
-  QObject::connect(ytDlpService, &YtDlpService::streamUrlReady, audioPlayer,
-                   [audioPlayer](const QString &, const QUrl &url) {
-                     audioPlayer->play(url);
-                   });
+  // Khi streamUrlReady → phát + xóa retry count
+  QObject::connect(
+      ytDlpService, &YtDlpService::streamUrlReady, &app,
+      [audioPlayer, retryCount](const QString &videoId, const QUrl &url) {
+        retryCount->remove(videoId);
+        audioPlayer->play(url);
+      });
 
   // Thumbnail loaded → cập nhật vào PlaylistManager để MiniPlayer nhận được
   QObject::connect(
@@ -76,18 +85,27 @@ int main(int argc, char *argv[]) {
         playlistMgr->updateTrackThumbnail(videoId, pixmap);
       });
 
-  // Khi YtDlpService lỗi stream → bỏ qua track, chuyển next (có guard)
-  QObject::connect(ytDlpService, &YtDlpService::streamErrorOccurred, &app,
-                   [playlistMgr](const QString &videoId, const QString &msg) {
-                     qWarning("Stream error [%s]: %s",
-                              videoId.toUtf8().constData(),
-                              msg.toUtf8().constData());
-                     // Chỉ skip nếu track lỗi đúng là track đang phát
-                     if (playlistMgr->currentTrack().videoId == videoId &&
-                         playlistMgr->hasNext()) {
-                       playlistMgr->next();
-                     }
-                   });
+  // ── Auto-recovery: retry 1 lần khi stream lỗi, sau đó skip ─────────────
+  QObject::connect(
+      ytDlpService, &YtDlpService::streamErrorOccurred, &app,
+      [playlistMgr, ytDlpService, retryCount](const QString &videoId,
+                                              const QString &msg) {
+        VLOG_WARN("Coordinator", "Stream lỗi [" + videoId + "]: " + msg);
+        const int count = retryCount->value(videoId, 0);
+        if (count < 1) {
+          retryCount->insert(videoId, count + 1);
+          VLOG_INFO("Coordinator", "Auto-retry lần 1 cho: " + videoId);
+          ytDlpService->invalidateStreamCache(videoId);
+          ytDlpService->resolveStreamUrl(videoId);
+        } else {
+          retryCount->remove(videoId);
+          VLOG_WARN("Coordinator", "Bỏ qua track sau retry: " + videoId);
+          if (playlistMgr->currentTrack().videoId == videoId &&
+              playlistMgr->hasNext()) {
+            playlistMgr->next();
+          }
+        }
+      });
 
   // ── Kết nối Tray → App ────────────────────────────────────────────────
   QObject::connect(trayManager, &TrayManager::toggleOverlayRequested,

@@ -1,10 +1,13 @@
 #include "MainWindow.h"
+#include "../core/LogService.h"
 #include "IconFont.h"
+#include "LogViewerDialog.h"
 #include "PlaylistImportDialog.h"
 
 #include <QCloseEvent>
 #include <QDir>
 #include <QDirIterator>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -84,7 +87,12 @@ MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
   connect(m_importer, &PlaylistImporter::thumbnailLoaded, this,
           &MainWindow::onThumbnailLoaded);
 
-  // ── AudioPlayer error → chỉ log, không hiện dialog cho YouTube ──────────
+  // ── Chấm đỏ khi có lỗi ───────────────────────────────────────────────
+  connect(&LogService::instance(), &LogService::errorLogged, this, [this]() {
+    m_downloadLogBtn->setIcon(
+        IconFont::icon(IconFont::DESCRIPTION, 14, QColor(255, 80, 80)));
+    m_downloadLogBtn->setToolTip("⚠ Có lỗi – Click để xem log");
+  });
   connect(m_player, &AudioPlayer::errorOccurred, this,
           [this](const QString &errorMsg) {
             const Track current = m_playlist->currentTrack();
@@ -153,6 +161,15 @@ void MainWindow::setupUi() {
   m_statusLabel = new QLabel("No tracks loaded", central);
   m_statusLabel->setObjectName("statusLabel");
 
+  // ── Download Log button – góc dưới phải ──────────────────────────────
+  m_downloadLogBtn = new QPushButton(central);
+  m_downloadLogBtn->setObjectName("logBtn");
+  m_downloadLogBtn->setToolTip("Xuất log để gửi báo cáo lỗi");
+  m_downloadLogBtn->setFixedSize(28, 28);
+  m_downloadLogBtn->setIcon(
+      IconFont::icon(IconFont::DESCRIPTION, 14, QColor(100, 100, 100)));
+  m_downloadLogBtn->setIconSize({14, 14});
+
   auto *btnLayout = new QHBoxLayout;
   btnLayout->setSpacing(6);
   btnLayout->addWidget(m_addFolderBtn);
@@ -160,6 +177,7 @@ void MainWindow::setupUi() {
   btnLayout->addWidget(m_clearBtn);
   btnLayout->addWidget(m_importYtBtn);
   btnLayout->addStretch();
+  btnLayout->addWidget(m_downloadLogBtn);
 
   auto *mainLayout = new QVBoxLayout(central);
   mainLayout->setContentsMargins(12, 12, 12, 12);
@@ -177,6 +195,8 @@ void MainWindow::setupUi() {
           &MainWindow::onClearPlaylist);
   connect(m_importYtBtn, &QPushButton::clicked, this,
           &MainWindow::onImportYouTube);
+  connect(m_downloadLogBtn, &QPushButton::clicked, this,
+          &MainWindow::onDownloadLog);
   connect(m_playlistView, &QListWidget::itemDoubleClicked, this,
           &MainWindow::onPlaylistItemDoubleClicked);
 }
@@ -232,6 +252,15 @@ void MainWindow::applyStyle() {
             color: #555555;
             font-size: 11px;
             padding: 2px;
+        }
+        QPushButton#logBtn {
+            background: transparent;
+            border: 1px solid #2a2a2a;
+            border-radius: 6px;
+        }
+        QPushButton#logBtn:hover {
+            background: #2a2a2a;
+            border-color: #555555;
         }
     )");
 }
@@ -472,6 +501,16 @@ void MainWindow::onThumbnailLoaded(const QString &videoId,
       break;
     }
   }
+}
+
+void MainWindow::onDownloadLog() {
+  // Reset icon về bình thường khi mở log
+  m_downloadLogBtn->setIcon(
+      IconFont::icon(IconFont::DESCRIPTION, 14, QColor(100, 100, 100)));
+  m_downloadLogBtn->setToolTip("Xem log ứng dụng");
+
+  LogViewerDialog dlg(this);
+  dlg.exec();
 }
 
 void MainWindow::onRetryYouTubeTrack() {

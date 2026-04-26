@@ -34,6 +34,8 @@ constexpr char32_t REPEAT_ONE = 0x0E041;
 constexpr char32_t SETTINGS = 0x0E8B8;
 constexpr char32_t CLOSE = 0x0E5CD;
 constexpr char32_t QUEUE_MUSIC = 0x0E03D;
+constexpr char32_t DOWNLOAD = 0x0E2C4;
+constexpr char32_t DESCRIPTION = 0x0E873;
 
 inline void init() {
   // Load từ file cạnh exe — tránh embed 14MB vào binary
