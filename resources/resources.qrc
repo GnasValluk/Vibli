@@ -7,4 +7,7 @@
         <file>imgs/logo_256.png</file>
         <file>imgs/logo_32.png</file>
     </qresource>
+    <qresource prefix="/fonts">
+        <file>fonts/MaterialSymbolsRounded.ttf</file>
+    </qresource>
 </RCC>

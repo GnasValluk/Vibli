@@ -6,13 +6,15 @@
 
 #include "MediaCache.h"
 #include "PlaylistManager.h"
+#include "ThumbnailCache.h"
 #include "YtDlpService.h"
 
 /**
  * @brief PlaylistImporter – điều phối luồng import YouTube playlist.
  *
  * Streaming mode: mỗi track được thêm vào playlist ngay khi parse xong,
- * thumbnail tải async song song. Thumbnail được cache trên disk qua MediaCache.
+ * thumbnail tải async song song. Thumbnail được cache trên disk (MediaCache)
+ * và in-memory LRU (ThumbnailCache).
  */
 class PlaylistImporter : public QObject {
   Q_OBJECT
@@ -20,6 +22,7 @@ class PlaylistImporter : public QObject {
 public:
   explicit PlaylistImporter(YtDlpService *ytDlp, PlaylistManager *playlist,
                             QNetworkAccessManager *nam, MediaCache *cache,
+                            ThumbnailCache *thumbCache,
                             QObject *parent = nullptr);
   ~PlaylistImporter() override = default;
 
@@ -29,7 +32,7 @@ public:
    * @brief Khôi phục thumbnail từ disk cache cho các track đã load.
    *
    * Gọi sau khi playlist được restore từ PlaylistPersistence để
-   * điền lại QPixmap thumbnail mà không cần download lại.
+   * điền lại ThumbnailCache mà không cần download lại.
    */
   void restoreCachedThumbnails(const QList<Track> &tracks);
 
@@ -40,7 +43,8 @@ signals:
   void importStarted();
   void importFinished(int trackCount);
   void importFailed(const QString &reason);
-  void thumbnailLoaded(const QString &videoId, const QPixmap &pixmap);
+  /** Thumbnail đã sẵn sàng trong ThumbnailCache — UI dùng videoId để lấy. */
+  void thumbnailReady(const QString &videoId);
   // Tiến trình streaming: bao nhiêu track đã load
   void trackImported(int loaded);
 
@@ -56,5 +60,6 @@ private:
   PlaylistManager *m_playlist;
   QNetworkAccessManager *m_nam;
   MediaCache *m_cache;
+  ThumbnailCache *m_thumbCache;
   int m_importedCount = 0;
 };

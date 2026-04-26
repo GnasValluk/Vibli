@@ -40,6 +40,12 @@ Name: "startupicon";    Description: "Run VIBLI on &Windows startup"; GroupDescr
 ; Executable chính
 Source: "{#DeployDir}\VIBLI.exe";                    DestDir: "{app}"; Flags: ignoreversion
 
+; Font icon (fallback — bản release đã embed vào binary, file này là dự phòng)
+Source: "{#DeployDir}\MaterialSymbolsRounded.ttf";   DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
+
+; yt-dlp + ffmpeg tools
+Source: "{#DeployDir}\yt_dlp\*";                     DestDir: "{app}\yt_dlp";             Flags: ignoreversion recursesubdirs
+
 ; Qt core DLLs
 Source: "{#DeployDir}\Qt6Core.dll";                  DestDir: "{app}"; Flags: ignoreversion
 Source: "{#DeployDir}\Qt6Gui.dll";                   DestDir: "{app}"; Flags: ignoreversion

@@ -62,7 +62,6 @@ void YtDlpService::fetchPlaylistMetadata(const QString &playlistUrl) {
     m_metadataProcess->waitForFinished(1000);
   }
   m_metadataBuffer.clear();
-  m_fetchedTracks.clear();
   m_fetchedCount = 0;
   VLOG_INFO("YtDlpService", "Bắt đầu fetch playlist: " + playlistUrl);
   emit progressUpdated("Đang tải playlist...");
@@ -214,7 +213,6 @@ void YtDlpService::onMetadataReadyRead() {
       continue;
 
     m_fetchedCount++;
-    m_fetchedTracks.append(track.value());
 
     // Emit ngay để UI hiển thị dần
     emit trackFetched(track.value());
@@ -233,7 +231,6 @@ void YtDlpService::onMetadataProcessFinished(int exitCode,
       auto track = parseVideoJson(doc.object());
       if (track.has_value()) {
         m_fetchedCount++;
-        m_fetchedTracks.append(track.value());
         emit trackFetched(track.value());
       }
     }
@@ -244,9 +241,8 @@ void YtDlpService::onMetadataProcessFinished(int exitCode,
     const QString errOutput =
         QString::fromUtf8(m_metadataProcess->readAllStandardError());
     if (m_fetchedCount > 0) {
-      // Có một số track rồi, vẫn emit kết quả
       emit fetchProgress(m_fetchedCount, m_fetchedCount);
-      emit playlistMetadataReady(m_fetchedTracks);
+      emit playlistMetadataReady({});
     } else {
       emit errorOccurred("yt-dlp lỗi (exit " + QString::number(exitCode) +
                          "): " + errOutput);
@@ -262,7 +258,7 @@ void YtDlpService::onMetadataProcessFinished(int exitCode,
   emit fetchProgress(m_fetchedCount, m_fetchedCount);
   VLOG_INFO("YtDlpService",
             QString("Fetch xong playlist: %1 track").arg(m_fetchedCount));
-  emit playlistMetadataReady(m_fetchedTracks);
+  emit playlistMetadataReady({});
 }
 
 void YtDlpService::onStreamProcessFinished(int exitCode,

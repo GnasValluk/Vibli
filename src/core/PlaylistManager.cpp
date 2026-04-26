@@ -28,19 +28,6 @@ void PlaylistManager::addTracks(const QList<Track> &tracks) {
     jumpTo(0);
 }
 
-void PlaylistManager::updateTrackThumbnail(const QString &videoId,
-                                           const QPixmap &pixmap) {
-  for (Track &t : m_tracks) {
-    if (t.videoId == videoId) {
-      t.thumbnail = pixmap;
-      // Nếu đang phát track này, emit lại để UI cập nhật
-      if (m_currentIndex >= 0 && m_tracks.at(m_currentIndex).videoId == videoId)
-        emit currentTrackChanged(m_currentIndex, m_tracks.at(m_currentIndex));
-      break;
-    }
-  }
-}
-
 void PlaylistManager::removeTrack(int index) {
   if (index < 0 || index >= m_tracks.size())
     return;

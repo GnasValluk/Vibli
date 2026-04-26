@@ -1,4 +1,5 @@
 #include "MiniPlayer.h"
+#include "../core/ThumbnailCache.h"
 #include "IconFont.h"
 
 #include <QPainter>
@@ -7,8 +8,9 @@
 static constexpr int THUMB_SIZE = 70;
 
 MiniPlayer::MiniPlayer(AudioPlayer *player, PlaylistManager *playlist,
-                       QWidget *parent)
-    : OverlayWidget(parent), m_player(player), m_playlist(playlist) {
+                       ThumbnailCache *thumbCache, QWidget *parent)
+    : OverlayWidget(parent), m_player(player), m_playlist(playlist),
+      m_thumbCache(thumbCache) {
   setupUi();
   applyStyle();
   setFixedSize(360, 90);
@@ -286,24 +288,36 @@ void MiniPlayer::onVideoAvailableChanged(bool available) {
 }
 
 void MiniPlayer::updateTrackInfo(const Track &track) {
+  m_currentVideoId = track.videoId;
   m_titleLabel->setText(track.title.isEmpty() ? "Unknown title" : track.title);
 
   if (track.isYouTube) {
-    // Hiển thị uploader thay vì artist
     m_artistLabel->setText(track.uploader.isEmpty() ? "YouTube"
                                                     : track.uploader);
+    // Lấy thumbnail từ ThumbnailCache nếu có
+    if (m_thumbCache && m_thumbCache->contains(track.videoId)) {
+      m_audioArt->setPixmap(m_thumbCache->get(track.videoId));
+      m_thumbStack->setCurrentIndex(0);
+    } else {
+      m_audioArt->clearPixmap();
+      m_audioArt->setPlaceholderText("▶");
+    }
   } else {
     m_artistLabel->setText(track.artist.isEmpty() ? "Unknown artist"
                                                   : track.artist);
-  }
-
-  // Show YouTube thumbnail nếu có — RoundedImageWidget tự xử lý crop + bo góc
-  if (track.isYouTube && !track.thumbnail.isNull()) {
-    m_audioArt->setPixmap(track.thumbnail);
-    m_thumbStack->setCurrentIndex(0);
-  } else if (!track.isYouTube) {
     m_audioArt->clearPixmap();
     m_audioArt->setPlaceholderText("♪");
+  }
+}
+
+void MiniPlayer::onThumbnailReady(const QString &videoId) {
+  // Chỉ cập nhật nếu đây là track đang hiển thị
+  if (videoId != m_currentVideoId || !m_thumbCache)
+    return;
+  const QPixmap px = m_thumbCache->get(videoId);
+  if (!px.isNull()) {
+    m_audioArt->setPixmap(px);
+    m_thumbStack->setCurrentIndex(0);
   }
 }
 

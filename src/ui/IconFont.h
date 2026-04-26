@@ -38,15 +38,24 @@ constexpr char32_t DOWNLOAD = 0x0E2C4;
 constexpr char32_t DESCRIPTION = 0x0E873;
 
 inline void init() {
-  // Load từ file cạnh exe — tránh embed 14MB vào binary
-  QString fontPath =
-      QCoreApplication::applicationDirPath() + "/MaterialSymbolsRounded.ttf";
-  int id = QFontDatabase::addApplicationFont(fontPath);
-  if (id < 0) {
-    qWarning("IconFont: failed to load font from %s", qPrintable(fontPath));
-  } else {
-    qDebug() << "IconFont loaded:"
+  // Ưu tiên load từ Qt resource (embedded) — đảm bảo hoạt động cả debug lẫn
+  // release
+  int id =
+      QFontDatabase::addApplicationFont(":/fonts/MaterialSymbolsRounded.ttf");
+  if (id >= 0) {
+    qDebug() << "IconFont loaded from resource:"
              << QFontDatabase::applicationFontFamilies(id);
+    return;
+  }
+  // Fallback: load từ file cạnh exe (legacy / dev build)
+  const QString fontPath =
+      QCoreApplication::applicationDirPath() + "/MaterialSymbolsRounded.ttf";
+  id = QFontDatabase::addApplicationFont(fontPath);
+  if (id < 0) {
+    qWarning("IconFont: failed to load font from resource AND from %s",
+             qPrintable(fontPath));
+  } else {
+    qDebug() << "IconFont loaded from file:" << fontPath;
   }
 }
 

@@ -24,6 +24,7 @@ set(SOURCES
     src/core/AudioPlayer.cpp
     src/core/MediaCache.cpp
     src/core/PlaylistManager.cpp
+    src/core/ThumbnailCache.cpp
     src/core/YtDlpService.cpp
     src/core/PlaylistImporter.cpp
     src/core/PlaylistPersistence.cpp
@@ -41,6 +42,7 @@ set(HEADERS
     src/core/AudioPlayer.h
     src/core/MediaCache.h
     src/core/PlaylistManager.h
+    src/core/ThumbnailCache.h
     src/core/YtDlpService.h
     src/core/PlaylistImporter.h
     src/core/PlaylistPersistence.h

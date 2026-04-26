@@ -27,9 +27,10 @@ static const QSet<QString> VIDEO_EXTENSIONS = {
 
 MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
                        YtDlpService *ytDlpService, PlaylistImporter *importer,
-                       QWidget *parent)
+                       ThumbnailCache *thumbCache, QWidget *parent)
     : QMainWindow(parent), m_player(player), m_playlist(playlist),
-      m_ytDlpService(ytDlpService), m_importer(importer) {
+      m_ytDlpService(ytDlpService), m_importer(importer),
+      m_thumbCache(thumbCache) {
   setWindowTitle("VIBLI – Playlist");
   setMinimumSize(520, 420);
   setupUi();
@@ -84,8 +85,8 @@ MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
             if (m_loadingOverlay->isVisible())
               m_loadingOverlay->setMessage(msg);
           });
-  connect(m_importer, &PlaylistImporter::thumbnailLoaded, this,
-          &MainWindow::onThumbnailLoaded);
+  connect(m_importer, &PlaylistImporter::thumbnailReady, this,
+          &MainWindow::onThumbnailReady);
 
   // ── Chấm đỏ khi có lỗi ───────────────────────────────────────────────
   connect(&LogService::instance(), &LogService::errorLogged, this, [this]() {
@@ -384,7 +385,6 @@ void MainWindow::onPlaylistChanged() {
       IconFont::icon(IconFont::MUSIC_NOTE, 14, QColor(150, 150, 150));
   const QIcon videoIcon =
       IconFont::icon(IconFont::MOVIE, 14, QColor(150, 150, 150));
-  // Placeholder YouTube icon (đỏ) khi chưa có thumbnail
   const QIcon ytPlaceholder =
       IconFont::icon(IconFont::PLAY_ARROW, 14, QColor(255, 80, 80));
 
@@ -396,8 +396,6 @@ void MainWindow::onPlaylistChanged() {
     QIcon icon;
 
     if (t.isYouTube) {
-      // Dòng 1: title
-      // Dòng 2: uploader · duration · view count
       const QString dur = formatDuration(t.durationMs);
       QString sub;
       if (!t.uploader.isEmpty())
@@ -418,17 +416,20 @@ void MainWindow::onPlaylistChanged() {
           sub += QString::number(t.viewCount) + " views";
       }
       display = t.title + (sub.isEmpty() ? "" : "\n" + sub);
-      icon = t.thumbnail.isNull()
-                 ? ytPlaceholder
-                 : QIcon(t.thumbnail.scaled(48, 48, Qt::KeepAspectRatio,
-                                            Qt::SmoothTransformation));
+
+      // Lấy từ ThumbnailCache — đã scale sẵn, không tạo QPixmap mới
+      if (m_thumbCache && m_thumbCache->contains(t.videoId)) {
+        icon = QIcon(m_thumbCache->get(t.videoId));
+      } else {
+        icon = ytPlaceholder;
+      }
     } else {
       icon = t.isVideo ? videoIcon : audioIcon;
       display = t.artist.isEmpty() ? t.title : t.artist + " – " + t.title;
     }
 
     auto *item = new QListWidgetItem(icon, display);
-    item->setData(Qt::UserRole, t.videoId); // videoId để tra cứu thumbnail
+    item->setData(Qt::UserRole, t.videoId);
     if (t.isYouTube)
       item->setToolTip(buildYouTubeTooltip(t));
     m_playlistView->addItem(item);
@@ -482,22 +483,17 @@ void MainWindow::onMetadataChanged(const QString &title, const QString &artist,
   }
 }
 
-void MainWindow::onThumbnailLoaded(const QString &videoId,
-                                   const QPixmap &pixmap) {
+void MainWindow::onThumbnailReady(const QString &videoId) {
+  if (!m_thumbCache)
+    return;
+  const QPixmap px = m_thumbCache->get(videoId);
+  if (px.isNull())
+    return;
+  const QIcon icon(px);
   for (int i = 0; i < m_playlistView->count(); ++i) {
     QListWidgetItem *item = m_playlistView->item(i);
     if (item && item->data(Qt::UserRole).toString() == videoId) {
-      item->setIcon(QIcon(pixmap.scaled(48, 48, Qt::KeepAspectRatio,
-                                        Qt::SmoothTransformation)));
-      // Cập nhật thumbnail trong Track để MiniPlayer cũng nhận được
-      const QList<Track> &tracks = m_playlist->tracks();
-      for (int j = 0; j < tracks.size(); ++j) {
-        if (tracks.at(j).videoId == videoId) {
-          // PlaylistManager không expose setter nên update qua signal
-          // MiniPlayer sẽ nhận thumbnail khi currentTrackChanged
-          break;
-        }
-      }
+      item->setIcon(icon);
       break;
     }
   }

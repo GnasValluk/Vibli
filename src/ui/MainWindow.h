@@ -10,6 +10,7 @@
 #include "../core/LogService.h"
 #include "../core/PlaylistImporter.h"
 #include "../core/PlaylistManager.h"
+#include "../core/ThumbnailCache.h"
 #include "../core/YtDlpService.h"
 #include "LoadingOverlay.h"
 
@@ -19,12 +20,15 @@ class MainWindow : public QMainWindow {
 public:
   explicit MainWindow(AudioPlayer *player, PlaylistManager *playlist,
                       YtDlpService *ytDlpService, PlaylistImporter *importer,
-                      QWidget *parent = nullptr);
+                      ThumbnailCache *thumbCache, QWidget *parent = nullptr);
   ~MainWindow() override = default;
 
 protected:
   void closeEvent(QCloseEvent *event) override;
   void resizeEvent(QResizeEvent *event) override;
+
+public slots:
+  void onThumbnailReady(const QString &videoId);
 
 private slots:
   void onAddFolder();
@@ -37,7 +41,6 @@ private slots:
   void onCurrentTrackChanged(int index, const Track &track);
   void onMetadataChanged(const QString &title, const QString &artist,
                          const QString &album);
-  void onThumbnailLoaded(const QString &videoId, const QPixmap &pixmap);
   void onRetryYouTubeTrack();
 
 private:
@@ -51,13 +54,14 @@ private:
   PlaylistManager *m_playlist;
   YtDlpService *m_ytDlpService;
   PlaylistImporter *m_importer;
+  ThumbnailCache *m_thumbCache;
 
   QListWidget *m_playlistView;
   QPushButton *m_addFolderBtn;
   QPushButton *m_removeBtn;
   QPushButton *m_clearBtn;
   QPushButton *m_importYtBtn;
-  QPushButton *m_downloadLogBtn; // góc dưới phải
+  QPushButton *m_downloadLogBtn;
   QLabel *m_statusLabel;
   QLabel *m_nowPlayingLabel;
   LoadingOverlay *m_loadingOverlay = nullptr;

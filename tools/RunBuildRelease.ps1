@@ -40,9 +40,14 @@ Copy-Item "build\VIBLI.exe" "deploy\"
 windeployqt --release --no-translations --no-system-d3d-compiler "deploy\VIBLI.exe"
 if ($LASTEXITCODE -ne 0) { Write-Host "windeployqt failed." -ForegroundColor Red; exit 1 }
 
-# Copy font file
-Copy-Item "$QtRoot\$QtVersion\$QtCompiler\bin\MaterialSymbolsRounded.ttf" "deploy\" -ErrorAction SilentlyContinue
+# Copy font file (fallback cho dev, bản release dùng embedded resource)
 Copy-Item "resources\fonts\MaterialSymbolsRounded.ttf" "deploy\" -Force
+
+# Copy yt_dlp tools
+if (Test-Path "yt_dlp") {
+    Copy-Item -Recurse "yt_dlp" "deploy\yt_dlp" -Force
+    Write-Host "  Copied yt_dlp folder" -ForegroundColor Gray
+}
 
 # ── Xong ──────────────────────────────────────────────────────────────────────
 Write-Host ""

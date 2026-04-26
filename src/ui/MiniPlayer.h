@@ -2,6 +2,7 @@
 
 #include "../core/AudioPlayer.h"
 #include "../core/PlaylistManager.h"
+#include "../core/ThumbnailCache.h"
 #include "OverlayWidget.h"
 
 #include "RoundedImageWidget.h"
@@ -14,25 +15,17 @@
 #include <QVBoxLayout>
 #include <QVideoWidget>
 
+class PlaylistImporter;
+
 /**
  * @brief MiniPlayer – overlay player.
- *
- * Layout:
- *  ┌──────────────────────────────────────────┐
- *  │ [Thumbnail/Video 70x70]  Title / Artist  │
- *  │                          ─────────────── │
- *  │                          |◄  ▶  ►|  🔊─ │
- *  └──────────────────────────────────────────┘
- *
- * - Audio: thumbnail là ô vuông tối với icon nhạc
- * - Video: thumbnail phát video trực tiếp, fill vuông (crop center)
  */
 class MiniPlayer : public OverlayWidget {
   Q_OBJECT
 
 public:
   explicit MiniPlayer(AudioPlayer *player, PlaylistManager *playlist,
-                      QWidget *parent = nullptr);
+                      ThumbnailCache *thumbCache, QWidget *parent = nullptr);
   ~MiniPlayer() override = default;
 
 public slots:
@@ -40,6 +33,8 @@ public slots:
   void updatePlaybackState(bool playing);
   void updatePosition(qint64 posMs);
   void updateDuration(qint64 durMs);
+  /** Gọi khi thumbnail của videoId vừa sẵn sàng trong ThumbnailCache. */
+  void onThumbnailReady(const QString &videoId);
 
 private slots:
   void onPlayPauseClicked();
@@ -59,11 +54,12 @@ private:
 
   AudioPlayer *m_player;
   PlaylistManager *m_playlist;
+  ThumbnailCache *m_thumbCache;
 
-  // ── Thumbnail area (stack: video hoặc audio art) ──────────────────────
+  // ── Thumbnail area ────────────────────────────────────────────────────
   QStackedWidget *m_thumbStack;
-  RoundedImageWidget *m_audioArt; // audio/YouTube thumbnail — bo góc thật
-  VideoThumbnail *m_videoThumb;   // video playback — crop center, bo góc
+  RoundedImageWidget *m_audioArt;
+  VideoThumbnail *m_videoThumb;
 
   // ── Info & controls ───────────────────────────────────────────────────
   QLabel *m_titleLabel;
@@ -79,4 +75,5 @@ private:
   QSlider *m_volumeSlider;
 
   bool m_seeking = false;
+  QString m_currentVideoId; // videoId của track đang hiển thị
 };

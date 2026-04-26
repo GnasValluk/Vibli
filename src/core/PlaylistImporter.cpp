@@ -7,9 +7,10 @@
 PlaylistImporter::PlaylistImporter(YtDlpService *ytDlp,
                                    PlaylistManager *playlist,
                                    QNetworkAccessManager *nam,
-                                   MediaCache *cache, QObject *parent)
+                                   MediaCache *cache,
+                                   ThumbnailCache *thumbCache, QObject *parent)
     : QObject(parent), m_ytDlp(ytDlp), m_playlist(playlist), m_nam(nam),
-      m_cache(cache) {
+      m_cache(cache), m_thumbCache(thumbCache) {
   connect(m_ytDlp, &YtDlpService::trackFetched, this,
           &PlaylistImporter::onTrackFetched);
   connect(m_ytDlp, &YtDlpService::playlistMetadataReady, this,
@@ -67,18 +68,23 @@ void PlaylistImporter::onTrackFetched(const Track &track) {
   m_importedCount++;
   emit trackImported(m_importedCount);
 
-  // Kiểm tra disk cache trước khi download
-  if (!track.thumbnailUrl.isEmpty()) {
-    if (m_cache && m_cache->hasThumbnail(track.videoId)) {
-      // Cache hit: load từ disk, không cần network
-      const QPixmap cached = m_cache->loadThumbnail(track.videoId);
-      if (!cached.isNull()) {
-        emit thumbnailLoaded(track.videoId, cached);
-        return;
-      }
+  if (track.thumbnailUrl.isEmpty())
+    return;
+
+  // Cache hit: load từ disk vào ThumbnailCache, không cần network
+  if (m_cache && m_cache->hasThumbnail(track.videoId)) {
+    const QPixmap cached = m_cache->loadThumbnail(track.videoId);
+    if (!cached.isNull()) {
+      // Scale xuống 1 lần duy nhất khi đưa vào cache
+      const QPixmap scaled = cached.scaled(
+          120, 68, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+      if (m_thumbCache)
+        m_thumbCache->put(track.videoId, scaled);
+      emit thumbnailReady(track.videoId);
+      return;
     }
-    downloadThumbnail(track.videoId, track.thumbnailUrl);
   }
+  downloadThumbnail(track.videoId, track.thumbnailUrl);
 }
 
 void PlaylistImporter::onMetadataReady(const QList<Track> &tracks) {
@@ -86,7 +92,6 @@ void PlaylistImporter::onMetadataReady(const QList<Track> &tracks) {
 }
 
 void PlaylistImporter::onYtDlpError(const QString &error) {
-  // Nếu đã có một số track rồi thì không fail hoàn toàn
   if (m_importedCount > 0)
     emit importFinished(m_importedCount);
   else
@@ -105,12 +110,20 @@ void PlaylistImporter::downloadThumbnail(const QString &videoId,
     if (reply->error() != QNetworkReply::NoError)
       return;
     QPixmap px;
-    if (px.loadFromData(reply->readAll())) {
-      // Lưu xuống disk cache
-      if (m_cache)
-        m_cache->saveThumbnail(videoId, px);
-      emit thumbnailLoaded(videoId, px);
-    }
+    if (!px.loadFromData(reply->readAll()))
+      return;
+
+    // Lưu ảnh gốc xuống disk (để restore sau)
+    if (m_cache)
+      m_cache->saveThumbnail(videoId, px);
+
+    // Scale 1 lần duy nhất trước khi đưa vào LRU cache
+    const QPixmap scaled = px.scaled(120, 68, Qt::KeepAspectRatioByExpanding,
+                                     Qt::SmoothTransformation);
+    if (m_thumbCache)
+      m_thumbCache->put(videoId, scaled);
+
+    emit thumbnailReady(videoId);
   });
 }
 
@@ -122,10 +135,14 @@ void PlaylistImporter::restoreCachedThumbnails(const QList<Track> &tracks) {
       continue;
     if (m_cache->hasThumbnail(track.videoId)) {
       const QPixmap px = m_cache->loadThumbnail(track.videoId);
-      if (!px.isNull())
-        emit thumbnailLoaded(track.videoId, px);
+      if (!px.isNull()) {
+        const QPixmap scaled = px.scaled(
+            120, 68, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+        if (m_thumbCache)
+          m_thumbCache->put(track.videoId, scaled);
+        emit thumbnailReady(track.videoId);
+      }
     } else if (!track.thumbnailUrl.isEmpty()) {
-      // Không có trong cache → download và lưu
       downloadThumbnail(track.videoId, track.thumbnailUrl);
     }
   }

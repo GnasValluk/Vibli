@@ -78,7 +78,6 @@ private:
 
   QString m_pendingVideoId;
 
-  QByteArray m_metadataBuffer;  // buffer dòng chưa hoàn chỉnh
-  QList<Track> m_fetchedTracks; // tích lũy để emit playlistMetadataReady
+  QByteArray m_metadataBuffer; // buffer dòng chưa hoàn chỉnh
   int m_fetchedCount = 0;
 };
