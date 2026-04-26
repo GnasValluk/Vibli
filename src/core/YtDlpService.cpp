@@ -1,5 +1,6 @@
 #include "YtDlpService.h"
 #include "LogService.h"
+#include "MediaCache.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -41,6 +42,11 @@ QString YtDlpService::ytDlpPath() {
 
 bool YtDlpService::isAvailable() { return QFileInfo::exists(ytDlpPath()); }
 
+// ── MediaCache integration
+// ────────────────────────────────────────────────
+
+void YtDlpService::setMediaCache(MediaCache *cache) { m_mediaCache = cache; }
+
 // ── Public API
 // ────────────────────────────────────────────────────────────────
 
@@ -71,11 +77,25 @@ void YtDlpService::fetchPlaylistMetadata(const QString &playlistUrl) {
 }
 
 void YtDlpService::resolveStreamUrl(const QString &videoId) {
+  // Layer 1: in-memory cache
   if (m_streamCache.contains(videoId)) {
-    VLOG_DEBUG("YtDlpService", "Cache hit cho videoId: " + videoId);
+    VLOG_DEBUG("YtDlpService", "Memory cache hit cho videoId: " + videoId);
     emit streamUrlReady(videoId, m_streamCache.value(videoId));
     return;
   }
+
+  // Layer 2: persistent disk cache (TTL 6h)
+  if (m_mediaCache && m_mediaCache->hasStreamUrl(videoId)) {
+    const QUrl cachedUrl = m_mediaCache->loadStreamUrl(videoId);
+    if (cachedUrl.isValid()) {
+      VLOG_DEBUG("YtDlpService", "Disk cache hit cho videoId: " + videoId);
+      // Nạp vào memory cache để lần sau nhanh hơn
+      m_streamCache.insert(videoId, cachedUrl);
+      emit streamUrlReady(videoId, cachedUrl);
+      return;
+    }
+  }
+
   if (!isAvailable()) {
     VLOG_ERROR("YtDlpService", "Không tìm thấy yt-dlp.exe");
     emit streamErrorOccurred(videoId, "Không tìm thấy yt-dlp.exe");
@@ -98,6 +118,8 @@ void YtDlpService::resolveStreamUrl(const QString &videoId) {
 
 void YtDlpService::invalidateStreamCache(const QString &videoId) {
   m_streamCache.remove(videoId);
+  if (m_mediaCache)
+    m_mediaCache->invalidateStreamUrl(videoId);
 }
 
 // ── Parser
@@ -268,6 +290,9 @@ void YtDlpService::onStreamProcessFinished(int exitCode,
 
   const QUrl streamUrl(url);
   m_streamCache.insert(m_pendingVideoId, streamUrl);
+  // Lưu vào persistent cache để dùng lại sau khi restart
+  if (m_mediaCache)
+    m_mediaCache->saveStreamUrl(m_pendingVideoId, streamUrl);
   VLOG_INFO("YtDlpService", "Stream URL OK cho: " + m_pendingVideoId);
   emit streamUrlReady(m_pendingVideoId, streamUrl);
 }

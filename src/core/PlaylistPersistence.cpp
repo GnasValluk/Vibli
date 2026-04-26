@@ -7,7 +7,6 @@
 #include <QJsonValue>
 #include <QStandardPaths>
 
-
 PlaylistPersistence::PlaylistPersistence(QObject *parent) : QObject(parent) {}
 
 // ── Static helpers
@@ -97,7 +96,14 @@ QJsonObject PlaylistPersistence::trackToJson(const Track &track) const {
     obj["title"] = track.title;
     obj["durationMs"] = track.durationMs;
     obj["thumbnailUrl"] = track.thumbnailUrl;
-    // Do NOT save url (StreamUrl) or thumbnail (QPixmap)
+    obj["uploader"] = track.uploader;
+    obj["description"] = track.description;
+    obj["viewCount"] = static_cast<double>(track.viewCount);
+    obj["likeCount"] = static_cast<double>(track.likeCount);
+    obj["uploadDate"] = track.uploadDate;
+    obj["webpageUrl"] = track.webpageUrl;
+    // Do NOT save url (StreamUrl) or thumbnail (QPixmap) — handled by
+    // MediaCache
   } else {
     obj["type"] = "local";
     obj["url"] = track.url.toString();
@@ -129,6 +135,15 @@ PlaylistPersistence::trackFromJson(const QJsonObject &obj) const {
     t.title = title;
     t.durationMs = static_cast<qint64>(obj.value("durationMs").toDouble(0));
     t.thumbnailUrl = obj.value("thumbnailUrl").toString();
+    t.uploader = obj.value("uploader").toString();
+    t.artist = t.uploader;
+    t.description = obj.value("description").toString();
+    t.viewCount = static_cast<qint64>(obj.value("viewCount").toDouble(0));
+    t.likeCount = static_cast<qint64>(obj.value("likeCount").toDouble(0));
+    t.uploadDate = obj.value("uploadDate").toString();
+    t.webpageUrl = obj.value("webpageUrl").toString();
+    if (t.webpageUrl.isEmpty() && !videoId.isEmpty())
+      t.webpageUrl = "https://www.youtube.com/watch?v=" + videoId;
     return t;
 
   } else if (type == "local") {

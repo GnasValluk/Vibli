@@ -1,0 +1,6 @@
+// Windows resource file – embed app icon vào exe
+// Icon này được Windows dùng cho: title bar, taskbar, Alt+Tab, Explorer
+
+#include <windows.h>
+
+IDI_ICON1 ICON "imgs/logo.ico"

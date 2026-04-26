@@ -6,8 +6,10 @@
 
 PlaylistImporter::PlaylistImporter(YtDlpService *ytDlp,
                                    PlaylistManager *playlist,
-                                   QNetworkAccessManager *nam, QObject *parent)
-    : QObject(parent), m_ytDlp(ytDlp), m_playlist(playlist), m_nam(nam) {
+                                   QNetworkAccessManager *nam,
+                                   MediaCache *cache, QObject *parent)
+    : QObject(parent), m_ytDlp(ytDlp), m_playlist(playlist), m_nam(nam),
+      m_cache(cache) {
   connect(m_ytDlp, &YtDlpService::trackFetched, this,
           &PlaylistImporter::onTrackFetched);
   connect(m_ytDlp, &YtDlpService::playlistMetadataReady, this,
@@ -65,9 +67,18 @@ void PlaylistImporter::onTrackFetched(const Track &track) {
   m_importedCount++;
   emit trackImported(m_importedCount);
 
-  // Tải thumbnail song song
-  if (!track.thumbnailUrl.isEmpty())
+  // Kiểm tra disk cache trước khi download
+  if (!track.thumbnailUrl.isEmpty()) {
+    if (m_cache && m_cache->hasThumbnail(track.videoId)) {
+      // Cache hit: load từ disk, không cần network
+      const QPixmap cached = m_cache->loadThumbnail(track.videoId);
+      if (!cached.isNull()) {
+        emit thumbnailLoaded(track.videoId, cached);
+        return;
+      }
+    }
     downloadThumbnail(track.videoId, track.thumbnailUrl);
+  }
 }
 
 void PlaylistImporter::onMetadataReady(const QList<Track> &tracks) {
@@ -94,7 +105,28 @@ void PlaylistImporter::downloadThumbnail(const QString &videoId,
     if (reply->error() != QNetworkReply::NoError)
       return;
     QPixmap px;
-    if (px.loadFromData(reply->readAll()))
+    if (px.loadFromData(reply->readAll())) {
+      // Lưu xuống disk cache
+      if (m_cache)
+        m_cache->saveThumbnail(videoId, px);
       emit thumbnailLoaded(videoId, px);
+    }
   });
+}
+
+void PlaylistImporter::restoreCachedThumbnails(const QList<Track> &tracks) {
+  if (!m_cache)
+    return;
+  for (const Track &track : tracks) {
+    if (!track.isYouTube || track.videoId.isEmpty())
+      continue;
+    if (m_cache->hasThumbnail(track.videoId)) {
+      const QPixmap px = m_cache->loadThumbnail(track.videoId);
+      if (!px.isNull())
+        emit thumbnailLoaded(track.videoId, px);
+    } else if (!track.thumbnailUrl.isEmpty()) {
+      // Không có trong cache → download và lưu
+      downloadThumbnail(track.videoId, track.thumbnailUrl);
+    }
+  }
 }

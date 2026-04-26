@@ -22,6 +22,7 @@ find_package(Qt6 REQUIRED COMPONENTS
 set(SOURCES
     src/main.cpp
     src/core/AudioPlayer.cpp
+    src/core/MediaCache.cpp
     src/core/PlaylistManager.cpp
     src/core/YtDlpService.cpp
     src/core/PlaylistImporter.cpp
@@ -38,6 +39,7 @@ set(SOURCES
 
 set(HEADERS
     src/core/AudioPlayer.h
+    src/core/MediaCache.h
     src/core/PlaylistManager.h
     src/core/YtDlpService.h
     src/core/PlaylistImporter.h
@@ -58,6 +60,11 @@ set(HEADERS
 set(RESOURCES
     resources/resources.qrc
 )
+
+# Windows resource file – embed .ico vào exe (title bar, taskbar, Explorer)
+if(WIN32)
+    list(APPEND RESOURCES resources/app.rc)
+endif()
 
 # ── Executable ────────────────────────────────────────────────────────────────
 if(WIN32)

@@ -9,6 +9,7 @@
 #include <QUrl>
 #include <optional>
 
+#include "MediaCache.h"
 #include "PlaylistManager.h"
 
 /**
@@ -16,6 +17,10 @@
  *
  * Streaming mode: emit trackFetched() cho từng video ngay khi parse xong,
  * không đợi hết playlist. Cho phép UI hiển thị dần dần.
+ *
+ * Stream URL được cache 2 lớp:
+ *  - In-memory (QMap): nhanh nhất, mất khi thoát app
+ *  - Persistent (MediaCache): lưu disk, TTL 6h, sống qua restart
  */
 class YtDlpService : public QObject {
   Q_OBJECT
@@ -23,6 +28,9 @@ class YtDlpService : public QObject {
 public:
   explicit YtDlpService(QObject *parent = nullptr);
   ~YtDlpService() override = default;
+
+  /** Gắn MediaCache để dùng persistent stream URL cache. */
+  void setMediaCache(MediaCache *cache);
 
   static bool isAvailable();
 
@@ -62,7 +70,12 @@ private:
   QProcess *m_metadataProcess = nullptr;
   QProcess *m_streamProcess = nullptr;
   QTimer *m_streamTimer = nullptr;
+
+  // In-memory stream cache (layer 1 – fastest)
   QMap<QString, QUrl> m_streamCache;
+  // Persistent stream cache (layer 2 – survives restart)
+  MediaCache *m_mediaCache = nullptr;
+
   QString m_pendingVideoId;
 
   QByteArray m_metadataBuffer;  // buffer dòng chưa hoàn chỉnh

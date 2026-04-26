@@ -4,6 +4,7 @@
 
 #include "core/AudioPlayer.h"
 #include "core/LogService.h"
+#include "core/MediaCache.h"
 #include "core/PlaylistImporter.h"
 #include "core/PlaylistManager.h"
 #include "core/PlaylistPersistence.h"
@@ -30,6 +31,7 @@ int main(int argc, char *argv[]) {
   QIcon appIcon;
   appIcon.addFile(":/imgs/logo_32.png", QSize(32, 32));
   appIcon.addFile(":/imgs/logo_256.png", QSize(256, 256));
+  appIcon.addFile(":/imgs/logo.png", QSize(1024, 1024));
   app.setWindowIcon(appIcon);
 
   // Load icon font
@@ -51,8 +53,13 @@ int main(int argc, char *argv[]) {
   auto *playlistMgr = new PlaylistManager(&app);
   auto *ytDlpService = new YtDlpService(&app);
   auto *nam = new QNetworkAccessManager(&app);
-  auto *importer = new PlaylistImporter(ytDlpService, playlistMgr, nam, &app);
+  auto *mediaCache = new MediaCache(&app);
+  auto *importer =
+      new PlaylistImporter(ytDlpService, playlistMgr, nam, mediaCache, &app);
   auto *persistence = new PlaylistPersistence(&app);
+
+  // Gắn MediaCache vào YtDlpService để dùng persistent stream URL cache
+  ytDlpService->setMediaCache(mediaCache);
 
   // ── Khởi tạo UI ──────────────────────────────────────────────────────
   auto *miniPlayer = new MiniPlayer(audioPlayer, playlistMgr);
@@ -169,6 +176,8 @@ int main(int argc, char *argv[]) {
   const QList<Track> savedTracks = persistence->load();
   if (!savedTracks.isEmpty()) {
     playlistMgr->addTracks(savedTracks);
+    // Khôi phục thumbnail từ disk cache (không cần download lại)
+    importer->restoreCachedThumbnails(savedTracks);
   }
 
   // ── Khởi động ─────────────────────────────────────────────────────────
