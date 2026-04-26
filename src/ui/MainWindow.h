@@ -1,9 +1,8 @@
 #pragma once
 
 #include <QLabel>
-#include <QListWidget>
+#include <QListView>
 #include <QMainWindow>
-#include <QNetworkAccessManager>
 #include <QPushButton>
 
 #include "../core/AudioPlayer.h"
@@ -13,6 +12,8 @@
 #include "../core/ThumbnailCache.h"
 #include "../core/YtDlpService.h"
 #include "LoadingOverlay.h"
+#include "PlaylistDelegate.h"
+#include "PlaylistModel.h"
 
 class MainWindow : public QMainWindow {
   Q_OBJECT
@@ -36,8 +37,7 @@ private slots:
   void onClearPlaylist();
   void onImportYouTube();
   void onDownloadLog();
-  void onPlaylistItemDoubleClicked(QListWidgetItem *item);
-  void onPlaylistChanged();
+  void onPlaylistItemDoubleClicked(const QModelIndex &index);
   void onCurrentTrackChanged(int index, const Track &track);
   void onMetadataChanged(const QString &title, const QString &artist,
                          const QString &album);
@@ -48,7 +48,6 @@ private:
   void applyStyle();
   void scanFolder(const QString &folderPath, QList<Track> &tracks);
   QString formatDuration(qint64 ms) const;
-  QString buildYouTubeTooltip(const Track &t) const;
 
   AudioPlayer *m_player;
   PlaylistManager *m_playlist;
@@ -56,7 +55,11 @@ private:
   PlaylistImporter *m_importer;
   ThumbnailCache *m_thumbCache;
 
-  QListWidget *m_playlistView;
+  // Model/View thay thế QListWidget
+  PlaylistModel *m_playlistModel = nullptr;
+  PlaylistDelegate *m_playlistDelegate = nullptr;
+  QListView *m_playlistView = nullptr;
+
   QPushButton *m_addFolderBtn;
   QPushButton *m_removeBtn;
   QPushButton *m_clearBtn;

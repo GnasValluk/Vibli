@@ -6,6 +6,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QString>
+#include <QStringList>
 #include <qdebug.h>
 
 /**
@@ -43,9 +44,7 @@ inline void init() {
   int id =
       QFontDatabase::addApplicationFont(":/fonts/MaterialSymbolsRounded.ttf");
   if (id >= 0) {
-    qDebug() << "IconFont loaded from resource:"
-             << QFontDatabase::applicationFontFamilies(id);
-    return;
+    return; // loaded from resource
   }
   // Fallback: load từ file cạnh exe (legacy / dev build)
   const QString fontPath =
@@ -54,8 +53,6 @@ inline void init() {
   if (id < 0) {
     qWarning("IconFont: failed to load font from resource AND from %s",
              qPrintable(fontPath));
-  } else {
-    qDebug() << "IconFont loaded from file:" << fontPath;
   }
 }
 

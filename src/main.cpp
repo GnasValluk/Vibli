@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QNetworkAccessManager>
+#include <QPixmapCache>
 #include <QStyleFactory>
 
 #include "core/AudioPlayer.h"
@@ -37,6 +38,10 @@ int main(int argc, char *argv[]) {
 
   // Load icon font
   IconFont::init();
+
+  // Giới hạn Qt internal pixmap cache — mặc định 10MB, giảm xuống 2MB
+  // vì app tự quản lý thumbnail qua ThumbnailCache LRU
+  QPixmapCache::setCacheLimit(2048);
 
   VLOG_INFO("App", "VIBLI khởi động – version 1.0.0");
 

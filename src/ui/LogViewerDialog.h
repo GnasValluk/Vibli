@@ -6,18 +6,11 @@
 #include <QPushButton>
 #include <QTextEdit>
 
-/**
- * @brief LogViewerDialog – xem log trực tiếp trong app.
- *
- * - Hiển thị log có màu theo level (xanh/vàng/đỏ)
- * - Tự cuộn xuống dòng mới nhất
- * - Nút Copy (copy toàn bộ) và Export (lưu file)
- * - Realtime: nhận log mới qua signal LogService::logged
- */
 class LogViewerDialog : public QDialog {
   Q_OBJECT
 public:
   explicit LogViewerDialog(QWidget *parent = nullptr);
+  ~LogViewerDialog() override;
 
 private slots:
   void onNewLog(LogService::Level level, const QString &component,

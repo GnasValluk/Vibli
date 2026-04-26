@@ -4,14 +4,11 @@
 #include <QPixmap>
 #include <QWidget>
 
-
 /**
  * @brief RoundedImageWidget – hiển thị QPixmap với bo góc thật sự.
  *
- * QLabel + border-radius không clip được ảnh.
- * Widget này vẽ trực tiếp bằng QPainter với QPainterPath clip.
- *
- * Khi không có ảnh: hiện placeholder tối với icon ký tự ở giữa.
+ * Fix: cache scaled pixmap — chỉ scale lại khi size thay đổi,
+ * không gọi scaled() mỗi lần paintEvent.
  */
 class RoundedImageWidget : public QWidget {
   Q_OBJECT
@@ -24,6 +21,7 @@ public:
 
   void setPixmap(const QPixmap &px) {
     m_pixmap = px;
+    m_scaledCache = QPixmap(); // invalidate cache
     update();
   }
 
@@ -34,10 +32,16 @@ public:
 
   void clearPixmap() {
     m_pixmap = QPixmap();
+    m_scaledCache = QPixmap();
     update();
   }
 
 protected:
+  void resizeEvent(QResizeEvent *e) override {
+    QWidget::resizeEvent(e);
+    m_scaledCache = QPixmap(); // invalidate on resize
+  }
+
   void paintEvent(QPaintEvent *) override {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
@@ -45,21 +49,20 @@ protected:
 
     const QRectF r = QRectF(rect()).adjusted(0.5, 0.5, -0.5, -0.5);
 
-    // Clip path bo góc
     QPainterPath clip;
     clip.addRoundedRect(r, m_radius, m_radius);
     p.setClipPath(clip);
 
     if (!m_pixmap.isNull()) {
-      // Scale cover + crop center
-      const QSize s = size();
-      QPixmap scaled = m_pixmap.scaled(s, Qt::KeepAspectRatioByExpanding,
-                                       Qt::SmoothTransformation);
-      const int x = (scaled.width() - s.width()) / 2;
-      const int y = (scaled.height() - s.height()) / 2;
-      p.drawPixmap(0, 0, scaled, x, y, s.width(), s.height());
+      // Rebuild scaled cache only when needed
+      if (m_scaledCache.isNull() || m_scaledCache.size() != size()) {
+        m_scaledCache = m_pixmap.scaled(size(), Qt::KeepAspectRatioByExpanding,
+                                        Qt::SmoothTransformation);
+      }
+      const int x = (m_scaledCache.width() - width()) / 2;
+      const int y = (m_scaledCache.height() - height()) / 2;
+      p.drawPixmap(0, 0, m_scaledCache, x, y, width(), height());
     } else {
-      // Placeholder tối
       p.fillPath(clip, QColor(42, 42, 42));
       if (!m_placeholder.isEmpty()) {
         p.setPen(QColor(100, 100, 100));
@@ -68,7 +71,6 @@ protected:
       }
     }
 
-    // Border mỏng
     p.setClipping(false);
     p.setPen(QPen(QColor(255, 255, 255, 30), 1.0));
     p.drawRoundedRect(r, m_radius, m_radius);
@@ -76,6 +78,7 @@ protected:
 
 private:
   QPixmap m_pixmap;
+  mutable QPixmap m_scaledCache; // cached scaled version
   QString m_placeholder = "♪";
   int m_radius;
 };

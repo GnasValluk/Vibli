@@ -96,6 +96,7 @@ LogViewerDialog::LogViewerDialog(QWidget *parent) : QDialog(parent) {
     )");
 
   // ── Connections ───────────────────────────────────────────────────────
+  // Lazy: chỉ nhận log realtime khi dialog đang mở
   connect(&LogService::instance(), &LogService::logged, this,
           &LogViewerDialog::onNewLog);
   connect(m_copyBtn, &QPushButton::clicked, this, &LogViewerDialog::onCopy);
@@ -104,6 +105,12 @@ LogViewerDialog::LogViewerDialog(QWidget *parent) : QDialog(parent) {
 
   // Load log hiện có
   loadExistingLog();
+}
+
+LogViewerDialog::~LogViewerDialog() {
+  // Disconnect khi đóng để không giữ QTextEdit DOM trong memory
+  disconnect(&LogService::instance(), &LogService::logged, this,
+             &LogViewerDialog::onNewLog);
 }
 
 // ── Load log file hiện có

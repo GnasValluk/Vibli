@@ -75,9 +75,10 @@ void PlaylistImporter::onTrackFetched(const Track &track) {
   if (m_cache && m_cache->hasThumbnail(track.videoId)) {
     const QPixmap cached = m_cache->loadThumbnail(track.videoId);
     if (!cached.isNull()) {
-      // Scale xuống 1 lần duy nhất khi đưa vào cache
+      // Scale xuống 1 lần duy nhất khi đưa vào cache — 64×64 đủ cho list (56px)
+      // và MiniPlayer (70px)
       const QPixmap scaled = cached.scaled(
-          120, 68, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+          64, 64, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
       if (m_thumbCache)
         m_thumbCache->put(track.videoId, scaled);
       emit thumbnailReady(track.videoId);
@@ -117,8 +118,8 @@ void PlaylistImporter::downloadThumbnail(const QString &videoId,
     if (m_cache)
       m_cache->saveThumbnail(videoId, px);
 
-    // Scale 1 lần duy nhất trước khi đưa vào LRU cache
-    const QPixmap scaled = px.scaled(120, 68, Qt::KeepAspectRatioByExpanding,
+    // Scale 1 lần duy nhất trước khi đưa vào LRU cache — 64×64
+    const QPixmap scaled = px.scaled(64, 64, Qt::KeepAspectRatioByExpanding,
                                      Qt::SmoothTransformation);
     if (m_thumbCache)
       m_thumbCache->put(videoId, scaled);
@@ -136,8 +137,8 @@ void PlaylistImporter::restoreCachedThumbnails(const QList<Track> &tracks) {
     if (m_cache->hasThumbnail(track.videoId)) {
       const QPixmap px = m_cache->loadThumbnail(track.videoId);
       if (!px.isNull()) {
-        const QPixmap scaled = px.scaled(
-            120, 68, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
+        const QPixmap scaled = px.scaled(64, 64, Qt::KeepAspectRatioByExpanding,
+                                         Qt::SmoothTransformation);
         if (m_thumbCache)
           m_thumbCache->put(track.videoId, scaled);
         emit thumbnailReady(track.videoId);

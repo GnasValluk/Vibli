@@ -7,19 +7,11 @@
 TrayManager::TrayManager(QObject *parent)
     : QObject(parent), m_trayIcon(new QSystemTrayIcon(this)),
       m_menu(new QMenu) {
-  // Load từng pixmap riêng để kiểm tra thực sự có data
+  // Tray icon chỉ cần 16-32px — không load ảnh lớn vào RAM
   QIcon icon;
   const QPixmap px32(":/imgs/logo_32.png");
-  const QPixmap px256(":/imgs/logo_256.png");
-  const QPixmap px1024(":/imgs/logo.png");
-
   if (!px32.isNull())
     icon.addPixmap(px32, QIcon::Normal, QIcon::Off);
-  if (!px256.isNull())
-    icon.addPixmap(px256, QIcon::Normal, QIcon::Off);
-  if (!px1024.isNull())
-    icon.addPixmap(px1024, QIcon::Normal, QIcon::Off);
-
   if (icon.isNull())
     icon = QApplication::style()->standardIcon(QStyle::SP_MediaPlay);
 

@@ -31,6 +31,8 @@ set(SOURCES
     src/ui/OverlayWidget.cpp
     src/ui/MiniPlayer.cpp
     src/ui/MainWindow.cpp
+    src/ui/PlaylistModel.cpp
+    src/ui/PlaylistDelegate.cpp
     src/ui/VideoThumbnail.cpp
     src/ui/PlaylistImportDialog.cpp
     src/ui/LoadingOverlay.cpp
@@ -50,6 +52,8 @@ set(HEADERS
     src/ui/OverlayWidget.h
     src/ui/MiniPlayer.h
     src/ui/MainWindow.h
+    src/ui/PlaylistModel.h
+    src/ui/PlaylistDelegate.h
     src/ui/VideoThumbnail.h
     src/ui/IconFont.h
     src/ui/PlaylistImportDialog.h
@@ -102,6 +106,13 @@ target_link_libraries(VIBLI PRIVATE
     Qt6::MultimediaWidgets
     Qt6::Network
 )
+
+# ── Release optimizations ─────────────────────────────────────────────────────
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    # Link-time optimization — giảm binary size ~20-30%
+    target_compile_options(VIBLI PRIVATE -flto -ffunction-sections -fdata-sections)
+    target_link_options(VIBLI PRIVATE -flto -Wl,--gc-sections -s)
+endif()
 
 # ── Install ───────────────────────────────────────────────────────────────────
 install(TARGETS VIBLI
