@@ -2,4 +2,9 @@
     <qresource prefix="/icons">
         <!-- placeholder -->
     </qresource>
+    <qresource prefix="/imgs">
+        <file>imgs/logo.png</file>
+        <file>imgs/logo_256.png</file>
+        <file>imgs/logo_32.png</file>
+    </qresource>
 </RCC>

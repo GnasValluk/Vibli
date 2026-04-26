@@ -48,6 +48,8 @@ private slots:
   void onSeekSliderMoved(int value);
   void onVolumeSliderMoved(int value);
   void onVideoAvailableChanged(bool available);
+  void onShuffleClicked();
+  void onRepeatClicked();
 
 private:
   void setupUi();
@@ -72,6 +74,8 @@ private:
   QPushButton *m_playPauseBtn;
   QPushButton *m_nextBtn;
   QPushButton *m_muteBtn;
+  QPushButton *m_shuffleBtn;
+  QPushButton *m_repeatBtn;
   QSlider *m_volumeSlider;
 
   bool m_seeking = false;

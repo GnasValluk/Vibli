@@ -87,14 +87,22 @@ void MiniPlayer::setupUi() {
   m_playPauseBtn = new QPushButton(this);
   m_nextBtn = new QPushButton(this);
   m_muteBtn = new QPushButton(this);
+  m_shuffleBtn = new QPushButton(this);
+  m_repeatBtn = new QPushButton(this);
+
   m_prevBtn->setObjectName("controlBtn");
   m_playPauseBtn->setObjectName("playPauseBtn");
   m_nextBtn->setObjectName("controlBtn");
   m_muteBtn->setObjectName("controlBtn");
+  m_shuffleBtn->setObjectName("controlBtn");
+  m_repeatBtn->setObjectName("controlBtn");
+
   m_prevBtn->setFixedSize(28, 28);
   m_playPauseBtn->setFixedSize(36, 36);
   m_nextBtn->setFixedSize(28, 28);
-  m_muteBtn->setFixedSize(28, 28);
+  m_muteBtn->setFixedSize(24, 24);
+  m_shuffleBtn->setFixedSize(24, 24);
+  m_repeatBtn->setFixedSize(24, 24);
 
   m_prevBtn->setIcon(IconFont::iconDual(IconFont::SKIP_PREVIOUS, 16));
   m_prevBtn->setIconSize({16, 16});
@@ -103,14 +111,22 @@ void MiniPlayer::setupUi() {
   m_playPauseBtn->setIconSize({20, 20});
   m_nextBtn->setIcon(IconFont::iconDual(IconFont::SKIP_NEXT, 16));
   m_nextBtn->setIconSize({16, 16});
-  m_muteBtn->setIcon(IconFont::iconDual(IconFont::VOLUME_UP, 16));
-  m_muteBtn->setIconSize({16, 16});
+  m_muteBtn->setIcon(IconFont::iconDual(IconFont::VOLUME_UP, 14));
+  m_muteBtn->setIconSize({14, 14});
+  m_shuffleBtn->setIcon(
+      IconFont::icon(IconFont::SHUFFLE, 14, QColor(100, 100, 100)));
+  m_shuffleBtn->setIconSize({14, 14});
+  m_shuffleBtn->setToolTip("Trộn bài");
+  m_repeatBtn->setIcon(
+      IconFont::icon(IconFont::REPEAT, 14, QColor(100, 100, 100)));
+  m_repeatBtn->setIconSize({14, 14});
+  m_repeatBtn->setToolTip("Lặp: Tắt");
 
-  // ── Volume slider ─────────────────────────────────────────────────────
+  // ── Volume slider — ngắn hơn ──────────────────────────────────────────
   m_volumeSlider = new QSlider(Qt::Horizontal, this);
   m_volumeSlider->setRange(0, 100);
   m_volumeSlider->setValue(80);
-  m_volumeSlider->setFixedWidth(60);
+  m_volumeSlider->setFixedWidth(44); // giảm từ 60 → 44
   m_volumeSlider->setObjectName("volumeSlider");
 
   // ── Layouts ───────────────────────────────────────────────────────────
@@ -122,14 +138,17 @@ void MiniPlayer::setupUi() {
   infoLayout->addWidget(m_seekSlider);
 
   auto *controlLayout = new QHBoxLayout;
-  controlLayout->setSpacing(4);
+  controlLayout->setSpacing(3);
   controlLayout->setContentsMargins(0, 0, 0, 0);
   controlLayout->addWidget(m_prevBtn);
   controlLayout->addWidget(m_playPauseBtn);
   controlLayout->addWidget(m_nextBtn);
-  controlLayout->addSpacing(6);
+  controlLayout->addSpacing(4);
   controlLayout->addWidget(m_muteBtn);
   controlLayout->addWidget(m_volumeSlider);
+  controlLayout->addSpacing(4);
+  controlLayout->addWidget(m_shuffleBtn);
+  controlLayout->addWidget(m_repeatBtn);
   controlLayout->addStretch();
   controlLayout->addWidget(m_timeLabel);
 
@@ -159,6 +178,10 @@ void MiniPlayer::setupUi() {
           [this] { m_seeking = true; });
   connect(m_seekSlider, &QSlider::sliderReleased, this,
           [this] { m_seeking = false; });
+  connect(m_shuffleBtn, &QPushButton::clicked, this,
+          &MiniPlayer::onShuffleClicked);
+  connect(m_repeatBtn, &QPushButton::clicked, this,
+          &MiniPlayer::onRepeatClicked);
 }
 
 void MiniPlayer::applyStyle() {
@@ -322,6 +345,54 @@ void MiniPlayer::onSeekSliderMoved(int value) {
 
 void MiniPlayer::onVolumeSliderMoved(int value) {
   m_player->setVolume(value / 100.0f);
+}
+
+void MiniPlayer::onShuffleClicked() {
+  const bool newShuffle = !m_playlist->isShuffle();
+  m_playlist->setShuffle(newShuffle);
+
+  // Icon sáng khi bật, tối khi tắt
+  const QColor c = newShuffle ? QColor(29, 185, 84) : QColor(100, 100, 100);
+  m_shuffleBtn->setIcon(IconFont::icon(IconFont::SHUFFLE, 14, c));
+  m_shuffleBtn->setToolTip(newShuffle ? "Trộn bài: Bật" : "Trộn bài: Tắt");
+}
+
+void MiniPlayer::onRepeatClicked() {
+  // Cycle: None → All → One → None
+  using RM = PlaylistManager::RepeatMode;
+  const RM current = m_playlist->repeatMode();
+  RM next;
+  switch (current) {
+  case RM::None:
+    next = RM::All;
+    break;
+  case RM::All:
+    next = RM::One;
+    break;
+  default:
+    next = RM::None;
+    break;
+  }
+  m_playlist->setRepeatMode(next);
+
+  // Cập nhật icon và tooltip
+  switch (next) {
+  case RM::All:
+    m_repeatBtn->setIcon(
+        IconFont::icon(IconFont::REPEAT, 14, QColor(29, 185, 84)));
+    m_repeatBtn->setToolTip("Lặp: Toàn bộ");
+    break;
+  case RM::One:
+    m_repeatBtn->setIcon(
+        IconFont::icon(IconFont::REPEAT_ONE, 14, QColor(29, 185, 84)));
+    m_repeatBtn->setToolTip("Lặp: 1 bài");
+    break;
+  default:
+    m_repeatBtn->setIcon(
+        IconFont::icon(IconFont::REPEAT, 14, QColor(100, 100, 100)));
+    m_repeatBtn->setToolTip("Lặp: Tắt");
+    break;
+  }
 }
 
 QString MiniPlayer::formatTime(qint64 ms) const {

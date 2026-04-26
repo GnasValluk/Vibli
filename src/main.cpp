@@ -26,6 +26,12 @@ int main(int argc, char *argv[]) {
   // Đảm bảo Qt resource system đã init
   Q_INIT_RESOURCE(resources);
 
+  // App icon — dùng nhiều kích thước để Windows chọn đúng
+  QIcon appIcon;
+  appIcon.addFile(":/imgs/logo_32.png", QSize(32, 32));
+  appIcon.addFile(":/imgs/logo_256.png", QSize(256, 256));
+  app.setWindowIcon(appIcon);
+
   // Load icon font
   IconFont::init();
 

@@ -4,13 +4,15 @@
 #include <QIcon>
 #include <QStyle>
 
-
 TrayManager::TrayManager(QObject *parent)
     : QObject(parent), m_trayIcon(new QSystemTrayIcon(this)),
       m_menu(new QMenu) {
-  QIcon icon = QIcon::fromTheme("audio-x-generic");
-  if (icon.isNull())
-    icon = QApplication::style()->standardIcon(QStyle::SP_MediaPlay);
+  QIcon icon(":/imgs/logo_32.png");
+  if (icon.isNull()) {
+    icon = QIcon::fromTheme("audio-x-generic");
+    if (icon.isNull())
+      icon = QApplication::style()->standardIcon(QStyle::SP_MediaPlay);
+  }
   m_trayIcon->setIcon(icon);
   m_trayIcon->setToolTip("VIBLI");
 
