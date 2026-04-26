@@ -3,7 +3,7 @@
 ; De thay doi version: CMakeLists.txt → project(VIBLI VERSION x.y.z)
 
 #define AppName      "VIBLI"
-#define AppVersion   "1.0.1"
+#define AppVersion   "@PROJECT_VERSION@"
 #define AppPublisher "VIBLI"
 #define AppExeName   "VIBLI.exe"
 #define DeployDir    "..\deploy"

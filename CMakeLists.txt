@@ -1,6 +1,20 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(VIBLI VERSION 1.0.0 LANGUAGES CXX)
+project(VIBLI VERSION 1.0.1 LANGUAGES CXX)
+
+# ── Version header (single source of truth) ───────────────────────────────────
+# Sửa version CHỈ ở dòng project() bên trên — tất cả chỗ khác tự cập nhật
+configure_file(
+    "${CMAKE_SOURCE_DIR}/src/version.h.in"
+    "${CMAKE_BINARY_DIR}/version.h"
+    @ONLY
+)
+# Inject version vào Inno Setup script
+configure_file(
+    "${CMAKE_SOURCE_DIR}/installer/vibli_setup.iss.in"
+    "${CMAKE_SOURCE_DIR}/installer/vibli_setup.iss"
+    @ONLY
+)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -80,7 +94,7 @@ else()
     add_executable(VIBLI ${SOURCES} ${HEADERS} ${RESOURCES})
 endif()
 
-target_include_directories(VIBLI PRIVATE src)
+target_include_directories(VIBLI PRIVATE src ${CMAKE_BINARY_DIR})
 
 # ── Copy font file cạnh exe ───────────────────────────────────────────────────
 add_custom_command(TARGET VIBLI POST_BUILD

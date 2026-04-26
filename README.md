@@ -1,179 +1,119 @@
-# VIBLI 🎵
+# VIBLI
 
-Ứng dụng phát media chạy nền với overlay phủ đè lên màn hình, xây dựng bằng **C++17 + Qt 6**.
-
-Hỗ trợ audio và video, đọc metadata tự động, system tray, mini player overlay luôn nằm trên cùng.
+Trình phát nhạc/video chạy nền, có mini player overlay luôn nằm trên cùng màn hình. Hỗ trợ local files và YouTube playlist.
 
 ---
 
 ## Tính năng
 
-- 🎵 Phát audio: `mp3 flac wav ogg aac m4a opus wma aiff ape wv dsf mka`
-- 🎬 Phát video: `mp4 mkv avi mov webm wmv flv ts m2ts 3gp ogv vob`
-- 🏷️ Đọc metadata tự động (title, artist, album) từ file
-- 🖥️ Mini Player overlay – luôn nằm trên cùng, kéo di chuyển được
-- 🔔 System Tray icon với context menu điều khiển nhanh
-- 📋 Quản lý playlist (thêm, xóa, chuyển bài, double-click để phát)
-- 🔀 Shuffle & Repeat (None / One / All)
-- 🌙 Chạy nền – không hiện trên taskbar
+- Phát audio/video local: `mp3 flac wav ogg aac m4a opus wma aiff ape` / `mp4 mkv avi mov webm wmv`
+- Import YouTube playlist qua yt-dlp
+- Mini Player overlay — kéo di chuyển, luôn trên cùng
+- System Tray — điều khiển nhanh không cần mở cửa sổ
+- Shuffle, Repeat (None / One / All)
+- Tự động lưu và khôi phục playlist khi khởi động lại
 
 ---
 
-## Yêu cầu cài đặt
+## Yêu cầu
 
-### 1. Qt 6 (bắt buộc)
+### Qt 6
 
-Tải về tại **https://www.qt.io/download-qt-installer**
+Tải tại https://www.qt.io/download-qt-installer, cài các component:
 
-Trong Qt Installer, chọn phiên bản Qt và tick các component sau:
-
-| Component | Bắt buộc |
+| Component | |
 |---|---|
-| Qt 6.x.x → MinGW 64-bit | ✅ |
-| Qt 6.x.x → Qt Multimedia | ✅ |
-| Qt 6.x.x → Qt Multimedia Widgets | ✅ |
-| Developer and Designer Tools → MinGW 13.x 64-bit | ✅ |
-| Developer and Designer Tools → CMake | ✅ |
-| Developer and Designer Tools → Ninja | ✅ |
+| Qt 6.x → MinGW 64-bit | ✅ |
+| Qt 6.x → Qt Multimedia + MultimediaWidgets | ✅ |
+| Developer Tools → MinGW 13.x 64-bit | ✅ |
+| Developer Tools → CMake + Ninja | ✅ |
 
-> Dự án này đang dùng Qt **6.11.0** cài tại `D:\data\qt`.
-> Nếu bạn cài ở đường dẫn khác, cập nhật `CMAKE_PREFIX_PATH` trong `CMakePresets.json`.
+> Dự án dùng Qt **6.11.0** cài tại `D:\data\qt`.  
+> Nếu cài ở đường dẫn khác, sửa `CMAKE_PREFIX_PATH` trong `CMakePresets.json`.
 
-### 2. Codec (khuyến nghị cho Windows)
+### Codec (Windows)
 
-Qt trên Windows dùng **Windows Media Foundation** làm backend. Để phát đầy đủ các định dạng như `.mkv`, `.flac`, `.opus`, `.ape`, cài thêm một trong hai:
-
-- **LAV Filters** (nhẹ, khuyến nghị): https://github.com/Nevcairiel/LAVFilters/releases
-- **K-Lite Codec Pack** (đầy đủ hơn): https://codecguide.com/download_kl.htm
-
-### 3. VS Code Extensions
-
-| Extension | ID |
-|---|---|
-| clangd | `llvm-vs-code-extensions.vscode-clangd` |
-| CMake Tools | `ms-vscode.cmake-tools` |
-| C/C++ Debug (GDB) | tùy IDE |
+Để phát đầy đủ định dạng (mkv, flac, opus...), cài một trong hai:
+- **LAV Filters** (nhẹ): https://github.com/Nevcairiel/LAVFilters/releases
+- **K-Lite Codec Pack**: https://codecguide.com/download_kl.htm
 
 ---
 
-## Build & Chạy
-
-### Cấu hình một lần (tạo build files)
+## Build Debug
 
 ```powershell
-# Thêm MinGW và CMake vào PATH tạm
+# Thêm tools vào PATH
 $env:PATH = "D:\data\qt\Tools\mingw1310_64\bin;D:\data\qt\Tools\Ninja;D:\data\qt\Tools\CMake_64\bin;$env:PATH"
 
-# Configure (dùng preset mặc định – Debug)
+# Configure + Build
 cmake --preset default
-```
-
-### Build Debug
-
-```powershell
-$env:PATH = "D:\data\qt\Tools\mingw1310_64\bin;D:\data\qt\Tools\Ninja;D:\data\qt\Tools\CMake_64\bin;$env:PATH"
-
 cmake --build build --parallel
 ```
 
-Executable output: `build\VIBLI.exe`
-
-### Chạy Debug
-
+Chạy:
 ```powershell
 $env:PATH = "D:\data\qt\6.11.0\mingw_64\bin;D:\data\qt\Tools\mingw1310_64\bin;$env:PATH"
-
 .\build\VIBLI.exe
 ```
 
-> Qt DLL phải có trong PATH khi chạy. Dòng trên thêm `mingw_64\bin` chứa toàn bộ Qt DLL.
+---
 
-### Build Release
-
-```powershell
-$env:PATH = "D:\data\qt\Tools\mingw1310_64\bin;D:\data\qt\Tools\Ninja;D:\data\qt\Tools\CMake_64\bin;$env:PATH"
-
-# Configure release
-cmake --preset release
-
-# Build
-cmake --build build --parallel
-```
-
-### Đóng gói Release (windeployqt)
-
-Sau khi build release, chạy `windeployqt` để copy đủ Qt DLL vào thư mục:
+## Build Release
 
 ```powershell
-$env:PATH = "D:\data\qt\6.11.0\mingw_64\bin;D:\data\qt\Tools\mingw1310_64\bin;$env:PATH"
-
-# Tạo thư mục deploy
-mkdir deploy
-
-# Copy exe
-copy build\VIBLI.exe deploy\
-
-# Deploy Qt dependencies
-windeployqt --release --no-translations deploy\VIBLI.exe
+powershell -ExecutionPolicy Bypass -File tools\Release.ps1
 ```
 
-Thư mục `deploy\` sau đó có thể zip và phân phối.
+Output:
+- `deploy\VIBLI.exe` — portable, zip và gửi được ngay
+- `dist\VIBLI_Setup_x.y.z.exe` — installer (cần [Inno Setup 6](https://jrsoftware.org/isdl.php))
+
+Tùy chọn:
+```powershell
+-SkipBuild      # Chỉ repackage, không build lại
+-SkipInstaller  # Không tạo installer
+-Version "2.0.0"  # Override version
+```
+
+### Đổi version
+
+Chỉ sửa **1 chỗ** trong `CMakeLists.txt`:
+```cmake
+project(VIBLI VERSION 1.2.0 LANGUAGES CXX)
+```
+CMake tự cập nhật version trong code, installer, và tên file output.
 
 ---
 
 ## Cấu trúc dự án
 
 ```
-VIBLI/
-├── CMakeLists.txt              # Build config
-├── CMakePresets.json           # Preset debug/release với đường dẫn Qt
-├── .clangd                     # Config cho clangd IntelliSense
-├── .vscode/
-│   ├── settings.json           # VS Code / Kiro settings
-│   ├── tasks.json              # Build tasks
-│   └── launch.json             # Debug launch config
-├── src/
-│   ├── main.cpp                # Entry point
-│   ├── core/
-│   │   ├── AudioPlayer.h/.cpp  # Engine phát media (Qt Multimedia)
-│   │   └── PlaylistManager.h/.cpp  # Playlist + shuffle/repeat
-│   ├── ui/
-│   │   ├── OverlayWidget.h/.cpp    # Base overlay (frameless, always-on-top)
-│   │   ├── MiniPlayer.h/.cpp       # Mini player overlay
-│   │   └── MainWindow.h/.cpp       # Cửa sổ playlist + video output
-│   └── tray/
-│       └── TrayManager.h/.cpp      # System tray icon & menu
-└── resources/
-    └── resources.qrc           # Icons, assets
+src/
+├── main.cpp
+├── core/
+│   ├── AudioPlayer        # Engine phát media (Qt Multimedia)
+│   ├── PlaylistManager    # Danh sách phát, shuffle/repeat
+│   ├── YtDlpService       # Giao tiếp yt-dlp, resolve stream URL
+│   ├── PlaylistImporter   # Import YouTube playlist
+│   ├── MediaCache         # Cache thumbnail (disk) + stream URL (TTL 6h)
+│   ├── ThumbnailCache     # LRU in-memory cache (tối đa 30 ảnh)
+│   ├── PlaylistPersistence  # Lưu/khôi phục playlist (JSON)
+│   └── LogService         # Logging có dedup
+├── ui/
+│   ├── MiniPlayer         # Overlay player
+│   ├── MainWindow         # Cửa sổ playlist
+│   ├── PlaylistModel      # QAbstractListModel cho playlist
+│   ├── PlaylistDelegate   # Custom item renderer
+│   └── ...
+└── tray/
+    └── TrayManager        # System tray icon & menu
 ```
-
----
-
-## Debug trong VS Code / Kiro
-
-1. Mở Command Palette (`Ctrl+Shift+P`) → **CMake: Select Configure Preset** → chọn `default`
-2. `Ctrl+Shift+P` → **CMake: Build**
-3. Nhấn `F5` để chạy debug (dùng GDB qua extension C/C++ Debug)
-
-Hoặc dùng task có sẵn: `Ctrl+Shift+B` → **CMake Build**
 
 ---
 
 ## Lưu ý
 
-- App **không hiện cửa sổ khi khởi động** — chạy nền qua system tray. Nhìn vào góc phải taskbar để thấy icon.
-- Click tray icon → toggle MiniPlayer overlay
-- Double-click tray icon → mở cửa sổ quản lý playlist
-- Khi phát file video, cửa sổ playlist tự mở và hiển thị video
-
----
-
-## Roadmap
-
-- [ ] Equalizer
-- [ ] Stream URL / radio online
-- [ ] Global hotkey
-- [ ] Lưu/tải playlist M3U
-- [ ] Lyrics trên overlay
-- [ ] Album art từ metadata
-- [ ] Tray icon thay đổi theo trạng thái phát
+- App **không hiện cửa sổ khi khởi động** — chạy nền qua system tray
+- Click tray icon → toggle MiniPlayer
+- Double-click tray icon → mở cửa sổ playlist
+- Playlist được tự động lưu khi thoát và khôi phục khi mở lại

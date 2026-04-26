@@ -5,6 +5,8 @@
 #include <QStyleFactory>
 #include <QTimer>
 
+#include "version.h"
+
 #include "core/AudioPlayer.h"
 #include "core/LogService.h"
 #include "core/MediaCache.h"
@@ -25,7 +27,7 @@ int main(int argc, char *argv[]) {
 
   QApplication app(argc, argv);
   app.setApplicationName("VIBLI");
-  app.setApplicationVersion("1.0.0");
+  app.setApplicationVersion(VIBLI_VERSION);
   app.setOrganizationName("VIBLI");
 
   // Đảm bảo Qt resource system đã init
@@ -45,7 +47,7 @@ int main(int argc, char *argv[]) {
   // vì app tự quản lý thumbnail qua ThumbnailCache LRU
   QPixmapCache::setCacheLimit(2048);
 
-  VLOG_INFO("App", "VIBLI khởi động – version 1.0.0");
+  VLOG_INFO("App", QString("VIBLI khởi động – version %1").arg(VIBLI_VERSION));
 
   // Không thoát khi đóng cửa sổ cuối – ứng dụng chạy nền qua tray
   app.setQuitOnLastWindowClosed(false);
