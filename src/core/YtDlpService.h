@@ -5,6 +5,7 @@
 #include <QMap>
 #include <QObject>
 #include <QProcess>
+#include <QQueue>
 #include <QTimer>
 #include <QUrl>
 #include <optional>
@@ -15,10 +16,13 @@
 /**
  * @brief YtDlpService – giao tiếp với yt-dlp.exe qua QProcess.
  *
- * Streaming mode: emit trackFetched() cho từng video ngay khi parse xong,
- * không đợi hết playlist. Cho phép UI hiển thị dần dần.
+ * Stream URL resolution:
+ *  - Format priority: m4a → webm/opus → best  (tránh demux fail trên Windows)
+ *  - Queue: nhiều videoId có thể được enqueue, xử lý tuần tự
+ *  - Pre-resolve: gọi prefetchStreamUrl() để resolve sẵn track tiếp theo
+ *  - Retry với format fallback khi primary format fail
  *
- * Stream URL được cache 2 lớp:
+ * Cache 2 lớp:
  *  - In-memory (QMap): nhanh nhất, mất khi thoát app
  *  - Persistent (MediaCache): lưu disk, TTL 6h, sống qua restart
  */
@@ -29,32 +33,37 @@ public:
   explicit YtDlpService(QObject *parent = nullptr);
   ~YtDlpService() override = default;
 
-  /** Gắn MediaCache để dùng persistent stream URL cache. */
   void setMediaCache(MediaCache *cache);
-
   static bool isAvailable();
 
   void fetchPlaylistMetadata(const QString &playlistUrl);
+
+  /**
+   * Resolve stream URL cho videoId.
+   * Nếu đang bận, enqueue và xử lý sau.
+   * Kết quả trả về qua signal streamUrlReady / streamErrorOccurred.
+   */
   void resolveStreamUrl(const QString &videoId);
+
+  /**
+   * Pre-fetch stream URL cho track tiếp theo ở background.
+   * Không emit signal nếu đã có trong cache.
+   * Ưu tiên thấp hơn resolveStreamUrl.
+   */
+  void prefetchStreamUrl(const QString &videoId);
+
   void invalidateStreamCache(const QString &videoId);
 
   // Parser (public để test độc lập)
   std::optional<Track> parseVideoJson(const QJsonObject &obj) const;
 
 signals:
-  // Streaming: emit từng track ngay khi parse xong
   void trackFetched(const Track &track);
-  // Khi toàn bộ playlist xong
   void playlistMetadataReady(const QList<Track> &tracks);
-  // Tiến trình: (loaded, total) — total = -1 nếu chưa biết
   void fetchProgress(int loaded, int total);
 
   void streamUrlReady(const QString &videoId, const QUrl &streamUrl);
-  // Lỗi khi fetch metadata playlist
-  void metadataErrorOccurred(const QString &errorMessage);
-  // Lỗi khi resolve stream URL (dùng riêng để tránh vòng lặp)
   void streamErrorOccurred(const QString &videoId, const QString &errorMessage);
-  // Lỗi chung (backward compat)
   void errorOccurred(const QString &errorMessage);
   void progressUpdated(const QString &statusMessage);
 
@@ -65,19 +74,35 @@ private slots:
   void onStreamProcessTimeout();
 
 private:
+  // Format selector theo thứ tự ưu tiên
+  // Index 0 = primary, 1 = fallback 1, 2 = fallback 2
+  static const QStringList FORMAT_PRIORITY;
+
   static QString ytDlpPath();
+  void processNextInQueue();
+  void startStreamProcess(const QString &videoId, const QString &format);
 
   QProcess *m_metadataProcess = nullptr;
   QProcess *m_streamProcess = nullptr;
   QTimer *m_streamTimer = nullptr;
 
-  // In-memory stream cache (layer 1 – fastest)
+  // In-memory stream cache
   QMap<QString, QUrl> m_streamCache;
-  // Persistent stream cache (layer 2 – survives restart)
   MediaCache *m_mediaCache = nullptr;
 
-  QString m_pendingVideoId;
+  // Queue: { videoId, isPrefetch }
+  struct StreamRequest {
+    QString videoId;
+    bool isPrefetch = false;
+  };
+  QQueue<StreamRequest> m_streamQueue;
+  bool m_streamBusy = false;
 
-  QByteArray m_metadataBuffer; // buffer dòng chưa hoàn chỉnh
+  // Retry state cho request đang xử lý
+  QString m_pendingVideoId;
+  int m_pendingFormatIdx = 0; // index vào FORMAT_PRIORITY
+  bool m_pendingIsPrefetch = false;
+
+  QByteArray m_metadataBuffer;
   int m_fetchedCount = 0;
 };

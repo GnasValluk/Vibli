@@ -1,7 +1,9 @@
 #include <QApplication>
 #include <QNetworkAccessManager>
 #include <QPixmapCache>
+#include <QSet>
 #include <QStyleFactory>
+#include <QTimer>
 
 #include "core/AudioPlayer.h"
 #include "core/LogService.h"
@@ -75,37 +77,98 @@ int main(int argc, char *argv[]) {
   auto *trayManager = new TrayManager(&app);
 
   // ── Coordinator: phát YouTube track ──────────────────────────────────
-  // Auto-recovery map: track số lần retry per videoId
+  // Retry state: { videoId → số lần đã retry }
   using RetryMap = QMap<QString, int>;
   auto *retryCount = new RetryMap();
 
-  // Khi currentTrackChanged: nếu isYouTube → resolveStreamUrl; nếu local → play
-  // trực tiếp
+  // Debounce guard: ignore error events trong vòng 2s sau khi đã bắt đầu retry
+  // Dùng QSet để track videoId đang trong cooldown
+  auto *retryCooldown = new QSet<QString>();
+  auto *cooldownTimer = new QTimer(&app);
+  cooldownTimer->setSingleShot(false);
+  cooldownTimer->setInterval(2000); // 2s cooldown per retry
+
+  // Khi currentTrackChanged: resolve stream URL + pre-fetch track tiếp theo
   QObject::connect(playlistMgr, &PlaylistManager::currentTrackChanged, &app,
-                   [audioPlayer, ytDlpService](int, const Track &track) {
+                   [audioPlayer, ytDlpService, playlistMgr, retryCount,
+                    retryCooldown](int index, const Track &track) {
+                     // Reset retry state khi chuyển track
+                     retryCount->clear();
+                     retryCooldown->clear();
+
                      if (track.isYouTube) {
                        ytDlpService->resolveStreamUrl(track.videoId);
+
+                       // Pre-fetch track tiếp theo ở background
+                       const int nextIdx = index + 1;
+                       if (nextIdx < playlistMgr->count()) {
+                         const Track next = playlistMgr->trackAt(nextIdx);
+                         if (next.isYouTube && !next.videoId.isEmpty())
+                           ytDlpService->prefetchStreamUrl(next.videoId);
+                       }
                      } else if (track.url.isValid()) {
                        audioPlayer->play(track.url);
                      }
                    });
 
-  // Khi streamUrlReady → phát + xóa retry count
+  // Khi streamUrlReady → phát nếu đúng track đang chờ
+  QObject::connect(ytDlpService, &YtDlpService::streamUrlReady, &app,
+                   [audioPlayer, playlistMgr, retryCount,
+                    retryCooldown](const QString &videoId, const QUrl &url) {
+                     if (playlistMgr->currentTrack().videoId != videoId)
+                       return; // prefetch cho track khác, bỏ qua
+
+                     retryCount->remove(videoId);
+                     retryCooldown->remove(
+                         videoId); // hết cooldown khi có URL mới
+                     audioPlayer->play(url);
+                   });
+
+  // ── Recoverable error (Demuxing failed, 403, network) → invalidate + retry
   QObject::connect(
-      ytDlpService, &YtDlpService::streamUrlReady, &app,
-      [audioPlayer, retryCount](const QString &videoId, const QUrl &url) {
-        retryCount->remove(videoId);
-        audioPlayer->play(url);
+      audioPlayer, &AudioPlayer::recoverableErrorOccurred, &app,
+      [playlistMgr, ytDlpService, retryCount,
+       retryCooldown](const QString &errorMsg) {
+        const Track current = playlistMgr->currentTrack();
+        if (!current.isYouTube || current.videoId.isEmpty())
+          return;
+
+        const QString videoId = current.videoId;
+
+        // Debounce: nếu đang trong cooldown → bỏ qua error event thừa
+        if (retryCooldown->contains(videoId)) {
+          VLOG_DEBUG("Coordinator",
+                     "Debounce error [" + videoId + "] (trong cooldown)");
+          return;
+        }
+
+        const int count = retryCount->value(videoId, 0);
+        VLOG_WARN("Coordinator", QString("Recoverable error [%1] retry=%2: %3")
+                                     .arg(videoId)
+                                     .arg(count)
+                                     .arg(errorMsg));
+
+        if (count < 2) {
+          retryCount->insert(videoId, count + 1);
+          retryCooldown->insert(videoId); // bắt đầu cooldown
+
+          // Dừng player trước khi retry để tránh emit error tiếp
+          // (không dùng stop() vì sẽ trigger playbackStopped)
+          ytDlpService->invalidateStreamCache(videoId);
+          // Delay nhỏ để QMediaPlayer flush error queue trước khi resolve
+          QTimer::singleShot(300, ytDlpService, [ytDlpService, videoId]() {
+            ytDlpService->resolveStreamUrl(videoId);
+          });
+        } else {
+          retryCount->remove(videoId);
+          retryCooldown->remove(videoId);
+          VLOG_WARN("Coordinator", "Hết retry, skip track: " + videoId);
+          if (playlistMgr->hasNext())
+            playlistMgr->next();
+        }
       });
 
-  // Thumbnail loaded → emit thumbnailReady đã được MainWindow/MiniPlayer
-  // lắng nghe trực tiếp qua importer signal
-  QObject::connect(importer, &PlaylistImporter::thumbnailReady, mainWindow,
-                   &MainWindow::onThumbnailReady);
-  QObject::connect(importer, &PlaylistImporter::thumbnailReady, miniPlayer,
-                   &MiniPlayer::onThumbnailReady);
-
-  // ── Auto-recovery: retry 1 lần khi stream lỗi, sau đó skip ─────────────
+  // ── Stream resolve error → retry hoặc skip
   QObject::connect(
       ytDlpService, &YtDlpService::streamErrorOccurred, &app,
       [playlistMgr, ytDlpService, retryCount](const QString &videoId,
@@ -127,25 +190,26 @@ int main(int argc, char *argv[]) {
         }
       });
 
+  // ── Thumbnail → MainWindow / MiniPlayer ──────────────────────────────
+  QObject::connect(importer, &PlaylistImporter::thumbnailReady, mainWindow,
+                   &MainWindow::onThumbnailReady);
+  QObject::connect(importer, &PlaylistImporter::thumbnailReady, miniPlayer,
+                   &MiniPlayer::onThumbnailReady);
+
   // ── Kết nối Tray → App ────────────────────────────────────────────────
   QObject::connect(trayManager, &TrayManager::toggleOverlayRequested,
                    miniPlayer, &MiniPlayer::toggleOverlay);
-
   QObject::connect(trayManager, &TrayManager::showMainWindowRequested,
                    mainWindow, &MainWindow::show);
-
   QObject::connect(trayManager, &TrayManager::playPauseRequested, audioPlayer,
                    [audioPlayer] {
                      audioPlayer->isPlaying() ? audioPlayer->pause()
                                               : audioPlayer->play();
                    });
-
   QObject::connect(trayManager, &TrayManager::nextTrackRequested, playlistMgr,
                    &PlaylistManager::next);
-
   QObject::connect(trayManager, &TrayManager::previousTrackRequested,
                    playlistMgr, &PlaylistManager::previous);
-
   QObject::connect(trayManager, &TrayManager::quitRequested, &app,
                    &QApplication::quit);
 
@@ -156,41 +220,35 @@ int main(int argc, char *argv[]) {
                    [trayManager] { trayManager->updatePlaybackState(false); });
   QObject::connect(audioPlayer, &AudioPlayer::playbackStopped, trayManager,
                    [trayManager] { trayManager->updatePlaybackState(false); });
-
   QObject::connect(playlistMgr, &PlaylistManager::currentTrackChanged,
                    trayManager, [trayManager](int, const Track &t) {
                      trayManager->updateTrackTitle(t.title);
                    });
 
   // ── Tự động phát bài tiếp theo khi hết bài ───────────────────────────
-  QObject::connect(
-      audioPlayer, &AudioPlayer::mediaStatusChanged, &app,
-      [audioPlayer, playlistMgr](QMediaPlayer::MediaStatus status) {
-        if (status == QMediaPlayer::EndOfMedia && playlistMgr->hasNext()) {
-          playlistMgr->next();
-          // currentTrackChanged coordinator sẽ xử lý phát
-        }
-      });
+  QObject::connect(audioPlayer, &AudioPlayer::mediaStatusChanged, &app,
+                   [playlistMgr](QMediaPlayer::MediaStatus status) {
+                     if (status == QMediaPlayer::EndOfMedia &&
+                         playlistMgr->hasNext())
+                       playlistMgr->next();
+                   });
 
   // ── Persistence ───────────────────────────────────────────────────────
-  // Lưu playlist khi thoát
   QObject::connect(&app, &QApplication::aboutToQuit, persistence,
                    [persistence, playlistMgr]() {
                      persistence->save(playlistMgr->tracks());
                    });
 
-  // Khôi phục playlist khi khởi động
   const QList<Track> savedTracks = persistence->load();
   if (!savedTracks.isEmpty()) {
     playlistMgr->addTracks(savedTracks);
-    // Khôi phục thumbnail từ disk cache (không cần download lại)
     importer->restoreCachedThumbnails(savedTracks);
   }
 
   // ── Khởi động ─────────────────────────────────────────────────────────
   trayManager->show();
   miniPlayer->showOverlay();
-  mainWindow->show(); // Mở MainWindow ngay khi khởi động
+  mainWindow->show();
 
   return app.exec();
 }

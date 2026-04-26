@@ -98,7 +98,23 @@ void AudioPlayer::onMediaStatusChanged(QMediaPlayer::MediaStatus status) {
 void AudioPlayer::onErrorOccurred(QMediaPlayer::Error /*error*/,
                                   const QString &errorString) {
   VLOG_ERROR("AudioPlayer", "Lỗi phát media: " + errorString);
-  emit errorOccurred(errorString);
+
+  // Phân loại lỗi: recoverable (demux/network) vs fatal
+  const bool isRecoverable =
+      errorString.contains("Demuxing", Qt::CaseInsensitive) ||
+      errorString.contains("demux", Qt::CaseInsensitive) ||
+      errorString.contains("Failed to open", Qt::CaseInsensitive) ||
+      errorString.contains("Connection refused", Qt::CaseInsensitive) ||
+      errorString.contains("403", Qt::CaseInsensitive) ||
+      errorString.contains("404", Qt::CaseInsensitive) ||
+      errorString.contains("timed out", Qt::CaseInsensitive) ||
+      errorString.contains("Network", Qt::CaseInsensitive);
+
+  if (isRecoverable) {
+    emit recoverableErrorOccurred(errorString);
+  } else {
+    emit errorOccurred(errorString);
+  }
 }
 
 void AudioPlayer::onMetaDataChanged() {

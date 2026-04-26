@@ -90,6 +90,14 @@ MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
             if (m_playlist->currentTrack().isYouTube)
               m_statusLabel->setText("⚠ Lỗi phát: " + errorMsg.left(80));
           });
+  connect(m_player, &AudioPlayer::recoverableErrorOccurred, this,
+          [this](const QString &errorMsg) {
+            // Chỉ log nhẹ ở status bar, không làm phiền user
+            // Coordinator trong main.cpp sẽ tự retry
+            if (m_playlist->currentTrack().isYouTube)
+              m_statusLabel->setText("↻ Đang thử lại...");
+            Q_UNUSED(errorMsg)
+          });
 
   // ── Status label update khi playlist thay đổi ─────────────────────────
   connect(m_playlist, &PlaylistManager::playlistChanged, this, [this]() {
