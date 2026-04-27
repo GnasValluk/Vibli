@@ -51,6 +51,7 @@ set(SOURCES
     src/ui/PlaylistImportDialog.cpp
     src/ui/LoadingOverlay.cpp
     src/ui/LogViewerDialog.cpp
+    src/ui/DownloadManagerDialog.cpp
     src/tray/TrayManager.cpp
 )
 
@@ -74,6 +75,7 @@ set(HEADERS
     src/ui/LoadingOverlay.h
     src/ui/RoundedImageWidget.h
     src/ui/LogViewerDialog.h
+    src/ui/DownloadManagerDialog.h
     src/tray/TrayManager.h
 )
 

@@ -11,6 +11,7 @@
 #include "../core/PlaylistManager.h"
 #include "../core/ThumbnailCache.h"
 #include "../core/YtDlpService.h"
+#include "DownloadManagerDialog.h"
 #include "LoadingOverlay.h"
 #include "PlaylistDelegate.h"
 #include "PlaylistModel.h"
@@ -48,6 +49,7 @@ private:
   void applyStyle();
   void scanFolder(const QString &folderPath, QList<Track> &tracks);
   QString formatDuration(qint64 ms) const;
+  void startDownload(const QString &url, DownloadFormat format);
 
   AudioPlayer *m_player;
   PlaylistManager *m_playlist;
@@ -68,4 +70,7 @@ private:
   QLabel *m_statusLabel;
   QLabel *m_nowPlayingLabel;
   LoadingOverlay *m_loadingOverlay = nullptr;
+
+  // Download manager (lazy-created, non-modal)
+  DownloadManagerDialog *m_downloadManager = nullptr;
 };

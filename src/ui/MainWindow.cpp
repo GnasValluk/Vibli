@@ -5,6 +5,7 @@
 #include "PlaylistImportDialog.h"
 
 #include <QCloseEvent>
+#include <QDateTime>
 #include <QDir>
 #include <QDirIterator>
 #include <QFileDialog>
@@ -354,9 +355,50 @@ void MainWindow::onImportYouTube() {
   PlaylistImportDialog dlg(this);
   if (dlg.exec() != QDialog::Accepted)
     return;
+
   const QString url = dlg.playlistUrl();
-  if (!url.isEmpty())
+  if (url.isEmpty())
+    return;
+
+  switch (dlg.selectedAction()) {
+  case ImportAction::ImportPlaylist:
     m_importer->importPlaylist(url);
+    break;
+  case ImportAction::DownloadMp3:
+    startDownload(url, DownloadFormat::Mp3);
+    break;
+  case ImportAction::DownloadMp4:
+    startDownload(url, DownloadFormat::Mp4);
+    break;
+  }
+}
+
+void MainWindow::startDownload(const QString &url, DownloadFormat format) {
+  // Chọn thư mục lưu
+  const QString outputDir = QFileDialog::getExistingDirectory(
+      this, "Chọn thư mục lưu file", QDir::homePath(),
+      QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
+  if (outputDir.isEmpty())
+    return;
+
+  // Tạo job
+  DownloadJob job;
+  job.url = url;
+  job.format = format;
+  job.outputDir = outputDir;
+  job.jobId = QString::number(QDateTime::currentMSecsSinceEpoch());
+
+  const QString label =
+      (format == DownloadFormat::Mp3 ? "MP3" : "MP4") + QString(" – ") + url;
+
+  // Lazy-create dialog (non-modal, tồn tại suốt vòng đời MainWindow)
+  if (!m_downloadManager)
+    m_downloadManager = new DownloadManagerDialog(m_ytDlpService, this);
+
+  m_downloadManager->addJob(job, label);
+  m_downloadManager->show();
+  m_downloadManager->raise();
+  m_downloadManager->activateWindow();
 }
 
 void MainWindow::onPlaylistItemDoubleClicked(const QModelIndex &index) {

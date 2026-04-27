@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonValue>
+#include <QRegularExpression>
 
 static constexpr int STREAM_TIMEOUT_MS = 35000; // 35s — đủ cho mạng chậm
 
@@ -34,10 +35,23 @@ YtDlpService::YtDlpService(QObject *parent) : QObject(parent) {
   m_streamTimer->setInterval(STREAM_TIMEOUT_MS);
   connect(m_streamTimer, &QTimer::timeout, this,
           &YtDlpService::onStreamProcessTimeout);
+
+  m_downloadProcess = new QProcess(this);
+  connect(m_downloadProcess, &QProcess::readyReadStandardOutput, this,
+          &YtDlpService::onDownloadReadyRead);
+  connect(m_downloadProcess, &QProcess::readyReadStandardError, this,
+          &YtDlpService::onDownloadReadyRead);
+  connect(m_downloadProcess,
+          QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this,
+          &YtDlpService::onDownloadProcessFinished);
 }
 
 QString YtDlpService::ytDlpPath() {
   return QCoreApplication::applicationDirPath() + "/yt_dlp/yt-dlp.exe";
+}
+
+QString YtDlpService::ffmpegDir() {
+  return QCoreApplication::applicationDirPath() + "/yt_dlp";
 }
 
 bool YtDlpService::isAvailable() { return QFileInfo::exists(ytDlpPath()); }
@@ -137,6 +151,41 @@ void YtDlpService::invalidateStreamCache(const QString &videoId) {
     m_mediaCache->invalidateStreamUrl(videoId);
 }
 
+// ── Download API
+// ──────────────────────────────────────────────────────────────
+
+void YtDlpService::downloadMedia(const DownloadJob &job) {
+  if (job.url.isEmpty() || job.jobId.isEmpty() || job.outputDir.isEmpty()) {
+    VLOG_ERROR("YtDlpService", "downloadMedia: job thiếu thông tin bắt buộc");
+    emit downloadError(job.jobId,
+                       "Job không hợp lệ (url/jobId/outputDir rỗng)");
+    return;
+  }
+  if (!isAvailable()) {
+    emit downloadError(job.jobId, "Không tìm thấy yt-dlp.exe");
+    return;
+  }
+  m_downloadQueue.enqueue(job);
+  processNextDownload();
+}
+
+void YtDlpService::cancelDownload(const QString &jobId) {
+  // Xóa khỏi queue nếu chưa chạy
+  for (int i = 0; i < m_downloadQueue.size(); ++i) {
+    if (m_downloadQueue[i].jobId == jobId) {
+      m_downloadQueue.removeAt(i);
+      emit downloadError(jobId, "Đã hủy");
+      return;
+    }
+  }
+  // Kill nếu đang chạy
+  if (m_downloadBusy && m_activeDownload.jobId == jobId) {
+    if (m_downloadProcess->state() != QProcess::NotRunning)
+      m_downloadProcess->kill();
+    // onDownloadProcessFinished sẽ emit downloadError
+  }
+}
+
 // ── Private helpers
 // ───────────────────────────────────────────────────────────
 
@@ -179,6 +228,50 @@ void YtDlpService::startStreamProcess(const QString &videoId,
 
   m_streamTimer->start();
   m_streamProcess->start(ytDlpPath(), args);
+}
+
+void YtDlpService::processNextDownload() {
+  if (m_downloadBusy || m_downloadQueue.isEmpty())
+    return;
+  m_activeDownload = m_downloadQueue.dequeue();
+  m_downloadBusy = true;
+  m_currentDownloadFile.clear();
+  startDownloadProcess(m_activeDownload);
+}
+
+void YtDlpService::startDownloadProcess(const DownloadJob &job) {
+  if (m_downloadProcess->state() != QProcess::NotRunning) {
+    m_downloadProcess->kill();
+    m_downloadProcess->waitForFinished(1000);
+  }
+
+  VLOG_INFO("YtDlpService",
+            QString("Download [%1] format=%2 → %3")
+                .arg(job.jobId,
+                     job.format == DownloadFormat::Mp3 ? "mp3" : "mp4",
+                     job.outputDir));
+
+  QStringList args;
+  args << "--ffmpeg-location" << ffmpegDir() << "--no-warnings"
+       << "--newline" // progress từng dòng
+       << "--no-part" // không tạo file .part
+       << "-o" << (job.outputDir + "/%(title)s.%(ext)s");
+
+  if (job.format == DownloadFormat::Mp3) {
+    args << "-x"
+         << "--audio-format" << "mp3"
+         << "--audio-quality" << "0"; // VBR best quality
+  } else {
+    // MP4: video + audio, merge thành mp4
+    args << "-f"
+         << "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+         << "--merge-output-format" << "mp4";
+  }
+
+  args << job.url;
+
+  m_downloadProcess->setWorkingDirectory(job.outputDir);
+  m_downloadProcess->start(ytDlpPath(), args);
 }
 
 // ── Private slots
@@ -342,6 +435,76 @@ void YtDlpService::onStreamProcessTimeout() {
     emit streamErrorOccurred(m_pendingVideoId,
                              "Timeout khi lấy stream URL (tất cả format)");
   processNextInQueue();
+}
+
+// ── Download slots
+// ────────────────────────────────────────────────────────────
+
+void YtDlpService::onDownloadReadyRead() {
+  // Đọc cả stdout và stderr (yt-dlp ghi progress ra stderr khi có --newline)
+  const QString out =
+      QString::fromUtf8(m_downloadProcess->readAllStandardOutput());
+  const QString err =
+      QString::fromUtf8(m_downloadProcess->readAllStandardError());
+  const QString combined = out + err;
+
+  // Regex parse progress: "[download]  45.3% of ..."
+  static const QRegularExpression rePercent(
+      R"(\[download\]\s+([\d.]+)%)", QRegularExpression::CaseInsensitiveOption);
+  // Regex parse tên file: "[download] Destination: ..." hoặc "[ExtractAudio]
+  // Destination: ..."
+  static const QRegularExpression reFile(
+      R"(\[(?:download|ExtractAudio|ffmpeg)\] Destination:\s*(.+))",
+      QRegularExpression::CaseInsensitiveOption);
+
+  for (const QString &line : combined.split('\n')) {
+    const QString trimmed = line.trimmed();
+    if (trimmed.isEmpty())
+      continue;
+
+    // Cập nhật tên file đang tải
+    QRegularExpressionMatch mFile = reFile.match(trimmed);
+    if (mFile.hasMatch()) {
+      m_currentDownloadFile = QFileInfo(mFile.captured(1).trimmed()).fileName();
+      VLOG_DEBUG("YtDlpService", "Download file: " + m_currentDownloadFile);
+    }
+
+    // Cập nhật phần trăm
+    QRegularExpressionMatch mPct = rePercent.match(trimmed);
+    if (mPct.hasMatch()) {
+      const int percent =
+          qBound(0, static_cast<int>(mPct.captured(1).toDouble()), 100);
+      emit downloadProgress(m_activeDownload.jobId, percent,
+                            m_currentDownloadFile);
+    }
+  }
+}
+
+void YtDlpService::onDownloadProcessFinished(int exitCode,
+                                             QProcess::ExitStatus /*status*/) {
+  const QString jobId = m_activeDownload.jobId;
+  const QString outDir = m_activeDownload.outputDir;
+  m_downloadBusy = false;
+
+  if (exitCode != 0) {
+    const QString errOut =
+        QString::fromUtf8(m_downloadProcess->readAllStandardError()).trimmed();
+    VLOG_ERROR("YtDlpService", QString("Download lỗi [%1] exit=%2: %3")
+                                   .arg(jobId)
+                                   .arg(exitCode)
+                                   .arg(errOut));
+    emit downloadError(jobId, exitCode == QProcess::CrashExit
+                                  ? "Download bị hủy"
+                                  : "yt-dlp lỗi (exit " +
+                                        QString::number(exitCode) +
+                                        "): " + errOut);
+  } else {
+    VLOG_INFO("YtDlpService", "Download hoàn tất [" + jobId + "]");
+    emit downloadProgress(jobId, 100, m_currentDownloadFile);
+    emit downloadFinished(jobId, outDir);
+  }
+
+  processNextDownload();
 }
 
 // ── Parser
