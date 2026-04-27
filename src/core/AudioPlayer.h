@@ -1,11 +1,11 @@
 #pragma once
 
 #include <QAudioOutput>
+#include <QImage>
 #include <QMediaPlayer>
 #include <QObject>
 #include <QUrl>
 #include <QVideoSink>
-
 
 /**
  * @brief AudioPlayer – wrapper quanh QMediaPlayer của Qt6.
@@ -57,6 +57,8 @@ signals:
   void mediaStatusChanged(QMediaPlayer::MediaStatus status);
   void metadataChanged(const QString &title, const QString &artist,
                        const QString &album);
+  /** Phát khi có cover art từ file local (embedded album art). */
+  void coverArtReady(const QString &localPath, const QImage &image);
   void videoAvailableChanged(bool available);
 
 private slots:

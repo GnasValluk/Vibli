@@ -58,7 +58,8 @@ QVariant PlaylistModel::data(const QModelIndex &index, int role) const {
     return t.isYouTube ? buildYouTubeTooltip(t) : QVariant{};
 
   case Qt::UserRole:
-    return t.videoId;
+    // YouTube → videoId; local → đường dẫn file (làm key ThumbnailCache)
+    return t.isYouTube ? t.videoId : t.url.toLocalFile();
 
   case Qt::UserRole + 1:
     return t.isYouTube;
@@ -76,11 +77,12 @@ void PlaylistModel::onPlaylistChanged() {
   endResetModel();
 }
 
-void PlaylistModel::onThumbnailReady(const QString &videoId) {
-  // Tìm row có videoId này và chỉ invalidate đúng row đó
+void PlaylistModel::onThumbnailReady(const QString &key) {
   const int count = m_playlist->count();
   for (int i = 0; i < count; ++i) {
-    if (m_playlist->trackAt(i).videoId == videoId) {
+    const Track &t = m_playlist->trackAt(i);
+    const QString trackKey = t.isYouTube ? t.videoId : t.url.toLocalFile();
+    if (trackKey == key) {
       const QModelIndex idx = index(i);
       emit dataChanged(idx, idx, {Qt::DecorationRole});
       break;

@@ -4,7 +4,6 @@
 #include <QPainter>
 #include <QPainterPath>
 
-
 PlaylistDelegate::PlaylistDelegate(ThumbnailCache *thumbCache, QObject *parent)
     : QStyledItemDelegate(parent), m_thumbCache(thumbCache) {}
 
@@ -115,7 +114,7 @@ void PlaylistDelegate::drawThumbnail(QPainter *p, const QRect &rect,
   p->save();
   p->setClipPath(clip);
 
-  if (isYouTube && m_thumbCache && m_thumbCache->contains(videoId)) {
+  if (m_thumbCache && m_thumbCache->contains(videoId)) {
     // Lấy thẳng từ ThumbnailCache — không tạo QIcon mới
     const QPixmap &px = m_thumbCache->get(videoId);
     if (!px.isNull()) {

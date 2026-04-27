@@ -198,6 +198,18 @@ int main(int argc, char *argv[]) {
   QObject::connect(importer, &PlaylistImporter::thumbnailReady, miniPlayer,
                    &MiniPlayer::onThumbnailReady);
 
+  // Cover art từ file local (embedded metadata)
+  QObject::connect(audioPlayer, &AudioPlayer::coverArtReady, &app,
+                   [thumbCache, mainWindow,
+                    miniPlayer](const QString &localPath, const QImage &image) {
+                     if (!thumbCache->contains(localPath)) {
+                       const QPixmap pixmap = QPixmap::fromImage(image);
+                       thumbCache->put(localPath, pixmap);
+                       mainWindow->onThumbnailReady(localPath);
+                       miniPlayer->onThumbnailReady(localPath);
+                     }
+                   });
+
   // ── Kết nối Tray → App ────────────────────────────────────────────────
   QObject::connect(trayManager, &TrayManager::toggleOverlayRequested,
                    miniPlayer, &MiniPlayer::toggleOverlay);

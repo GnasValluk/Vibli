@@ -288,13 +288,12 @@ void MiniPlayer::onVideoAvailableChanged(bool available) {
 }
 
 void MiniPlayer::updateTrackInfo(const Track &track) {
-  m_currentVideoId = track.videoId;
+  m_currentVideoId = track.isYouTube ? track.videoId : track.url.toLocalFile();
   m_titleLabel->setText(track.title.isEmpty() ? "Unknown title" : track.title);
 
   if (track.isYouTube) {
     m_artistLabel->setText(track.uploader.isEmpty() ? "YouTube"
                                                     : track.uploader);
-    // Lấy thumbnail từ ThumbnailCache nếu có
     if (m_thumbCache && m_thumbCache->contains(track.videoId)) {
       m_audioArt->setPixmap(m_thumbCache->get(track.videoId));
       m_thumbStack->setCurrentIndex(0);
@@ -305,8 +304,13 @@ void MiniPlayer::updateTrackInfo(const Track &track) {
   } else {
     m_artistLabel->setText(track.artist.isEmpty() ? "Unknown artist"
                                                   : track.artist);
-    m_audioArt->clearPixmap();
-    m_audioArt->setPlaceholderText("♪");
+    const QString localKey = track.url.toLocalFile();
+    if (m_thumbCache && m_thumbCache->contains(localKey)) {
+      m_audioArt->setPixmap(m_thumbCache->get(localKey));
+    } else {
+      m_audioArt->clearPixmap();
+      m_audioArt->setPlaceholderText(track.isVideo ? "🎬" : "♪");
+    }
   }
 }
 

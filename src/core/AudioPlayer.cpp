@@ -1,7 +1,9 @@
 #include "AudioPlayer.h"
 #include "LogService.h"
 #include <QDebug>
+#include <QImage>
 #include <QMediaMetaData>
+#include <QPixmap>
 
 AudioPlayer::AudioPlayer(QObject *parent)
     : QObject(parent), m_player(new QMediaPlayer(this)),
@@ -128,4 +130,14 @@ void AudioPlayer::onMetaDataChanged() {
 
   if (!title.isEmpty() || !artist.isEmpty())
     emit metadataChanged(title, artist, album);
+
+  // Cover art cho file local
+  const QString localPath = m_player->source().toLocalFile();
+  if (!localPath.isEmpty()) {
+    QImage img = meta.value(QMediaMetaData::ThumbnailImage).value<QImage>();
+    if (img.isNull())
+      img = meta.value(QMediaMetaData::CoverArtImage).value<QImage>();
+    if (!img.isNull())
+      emit coverArtReady(localPath, img);
+  }
 }
