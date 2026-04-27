@@ -113,6 +113,11 @@ signals:
   void downloadError(const QString &jobId, const QString &errorMessage);
   /** Download cancelled by user. */
   void downloadCancelled(const QString &jobId);
+  /** Download is retrying after an error. */
+  void downloadRetrying(const QString &jobId, int attempt);
+  /** Per-file stats update within a playlist job. */
+  void downloadStatsUpdated(const QString &jobId, int downloaded, int skipped,
+                            int total, const QStringList &skippedNames);
 
 private slots:
   void onMetadataReadyRead();
@@ -164,6 +169,11 @@ private:
   bool m_downloadBusy = false;
   bool m_downloadCancelled = false; ///< true when job was cancelled by user
   DownloadJob m_activeDownload;     ///< Currently running job
-  QString m_currentDownloadFile;    ///< Name of the file being downloaded (from
-                                    ///< stdout)
+  QString m_currentDownloadFile;    ///< Name of the file being downloaded
+  int m_downloadRetryCount = 0; ///< Retry count for current job (reset per job)
+  // Per-job playlist counters (parsed from yt-dlp output)
+  int m_dlFilesDownloaded = 0;
+  int m_dlFilesSkipped = 0;
+  int m_dlFilesTotal = 0;
+  QStringList m_dlSkippedTitles;
 };

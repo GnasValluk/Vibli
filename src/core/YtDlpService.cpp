@@ -233,11 +233,22 @@ void YtDlpService::startStreamProcess(const QString &videoId,
 }
 
 void YtDlpService::processNextDownload() {
+  VLOG_DEBUG("YtDlpService",
+             QString("processNextDownload: busy=%1 queueSize=%2")
+                 .arg(m_downloadBusy)
+                 .arg(m_downloadQueue.size()));
   if (m_downloadBusy || m_downloadQueue.isEmpty())
     return;
   m_activeDownload = m_downloadQueue.dequeue();
   m_downloadBusy = true;
   m_currentDownloadFile.clear();
+  m_downloadRetryCount = 0;
+  m_dlFilesDownloaded = 0;
+  m_dlFilesSkipped = 0;
+  m_dlFilesTotal = 0;
+  m_dlSkippedTitles.clear();
+  VLOG_INFO("YtDlpService",
+            QString("Starting next download: %1").arg(m_activeDownload.jobId));
   startDownloadProcess(m_activeDownload);
 }
 
@@ -278,6 +289,16 @@ void YtDlpService::startDownloadProcess(const DownloadJob &job) {
 
   m_downloadProcess->setWorkingDirectory(job.outputDir);
   m_downloadProcess->start(ytDlpPath(), args);
+
+  // Check if process started successfully
+  if (!m_downloadProcess->waitForStarted(3000)) {
+    VLOG_ERROR(
+        "YtDlpService",
+        QString("Failed to start download process for [%1]").arg(job.jobId));
+    m_downloadBusy = false;
+    emit downloadError(job.jobId, "Failed to start yt-dlp process");
+    processNextDownload();
+  }
 }
 
 // ── Private slots
@@ -470,11 +491,70 @@ void YtDlpService::onDownloadReadyRead() {
   static const QRegularExpression rePhase(
       R"(\[(ExtractAudio|ffmpeg|EmbedThumbnail|Metadata|MoveFiles)\])",
       QRegularExpression::CaseInsensitiveOption);
+  // yt-dlp playlist item counter: "[download] Downloading item X of Y"
+  static const QRegularExpression reItem(
+      R"(\[download\] Downloading item (\d+) of (\d+))",
+      QRegularExpression::CaseInsensitiveOption);
+  // yt-dlp already downloaded: "[download] ... has already been downloaded"
+  static const QRegularExpression reAlready(
+      R"(\[download\] .+ has already been downloaded)",
+      QRegularExpression::CaseInsensitiveOption);
+  // yt-dlp error on single video inside playlist (stderr): "ERROR: ..."
+  static const QRegularExpression reError(
+      R"(^ERROR:(.+)$)", QRegularExpression::CaseInsensitiveOption);
 
   for (const QString &line : combined.split('\n')) {
     const QString trimmed = line.trimmed();
     if (trimmed.isEmpty())
       continue;
+
+    // Track playlist item count
+    QRegularExpressionMatch mItem = reItem.match(trimmed);
+    if (mItem.hasMatch()) {
+      const int currentItem = mItem.captured(1).toInt();
+      m_dlFilesTotal = mItem.captured(2).toInt();
+      // When we see item N starting, item N-1 has completed successfully
+      // (if it had errored, reError would have fired and incremented skipped)
+      if (currentItem > 1 &&
+          (m_dlFilesDownloaded + m_dlFilesSkipped) < currentItem - 1) {
+        m_dlFilesDownloaded++;
+      }
+      emit downloadStatsUpdated(m_activeDownload.jobId, m_dlFilesDownloaded,
+                                m_dlFilesSkipped, m_dlFilesTotal,
+                                m_dlSkippedTitles);
+      continue;
+    }
+
+    // Track per-file errors (single video inside playlist failed)
+    QRegularExpressionMatch mErr = reError.match(trimmed);
+    if (mErr.hasMatch()) {
+      m_dlFilesSkipped++;
+      // Use current file name if available, otherwise extract from error
+      // message
+      QString skippedName = m_currentDownloadFile;
+      if (skippedName.isEmpty()) {
+        // Try to extract video title from error (e.g. "[youtube] ID: Private
+        // video...")
+        const QString errMsg = mErr.captured(1).trimmed();
+        // Strip "[youtube] videoId: " prefix if present
+        static const QRegularExpression reErrPrefix(
+            R"(^\[[\w:]+\]\s+[\w-]+:\s*)");
+        skippedName = errMsg;
+        skippedName.remove(reErrPrefix);
+        skippedName = skippedName.left(60);
+      } else {
+        // Strip extension from file name for cleaner display
+        skippedName = QFileInfo(skippedName).completeBaseName();
+      }
+      m_dlSkippedTitles << skippedName;
+      VLOG_WARN("YtDlpService",
+                QString("Playlist item error [%1]: %2")
+                    .arg(m_activeDownload.jobId, mErr.captured(1).trimmed()));
+      emit downloadStatsUpdated(m_activeDownload.jobId, m_dlFilesDownloaded,
+                                m_dlFilesSkipped, m_dlFilesTotal,
+                                m_dlSkippedTitles);
+      continue;
+    }
 
     // Cập nhật tên file
     QRegularExpressionMatch mFile = reFile.match(trimmed);
@@ -500,12 +580,25 @@ void YtDlpService::onDownloadReadyRead() {
         statusText = "Moving files...";
 
       if (!statusText.isEmpty()) {
-        // Use percent = -1 as signal for "post-processing, no percentage"
         const QString payload =
             m_currentDownloadFile + "\x1F\x1F\x1F" + statusText;
         emit downloadProgress(m_activeDownload.jobId, -1, payload);
         continue;
       }
+    }
+
+    // "[download] 100% ..." — file fully downloaded (no post-processing)
+    // Count as downloaded when we see 100%
+    static const QRegularExpression re100(
+        R"(\[download\]\s+100%)", QRegularExpression::CaseInsensitiveOption);
+    if (re100.match(trimmed).hasMatch()) {
+      // Will be confirmed by MoveFiles or EmbedThumbnail; just track progress
+    }
+    if (reAlready.match(trimmed).hasMatch()) {
+      m_dlFilesDownloaded++;
+      emit downloadStatsUpdated(m_activeDownload.jobId, m_dlFilesDownloaded,
+                                m_dlFilesSkipped, m_dlFilesTotal,
+                                m_dlSkippedTitles);
     }
 
     // Parse progress đầy đủ (percent + speed + ETA)
@@ -548,16 +641,46 @@ void YtDlpService::onDownloadProcessFinished(int exitCode,
   }
 
   if (exitCode != 0) {
-    const QString errOut =
-        QString::fromUtf8(m_downloadProcess->readAllStandardError()).trimmed();
-    VLOG_ERROR("YtDlpService", QString("Download error [%1] exit=%2: %3")
-                                   .arg(jobId)
-                                   .arg(exitCode)
-                                   .arg(errOut));
-    emit downloadError(jobId, "yt-dlp error (exit " +
-                                  QString::number(exitCode) + "): " + errOut);
+    // If some files were downloaded or skipped, treat as partial success
+    if (m_dlFilesSkipped > 0 || m_dlFilesDownloaded > 0) {
+      // Count last item as downloaded if not already accounted for
+      if (m_dlFilesTotal > 0 &&
+          (m_dlFilesDownloaded + m_dlFilesSkipped) < m_dlFilesTotal) {
+        m_dlFilesDownloaded++;
+      }
+      VLOG_WARN("YtDlpService",
+                QString("Download partial [%1]: %2 ok, %3 skipped")
+                    .arg(jobId)
+                    .arg(m_dlFilesDownloaded)
+                    .arg(m_dlFilesSkipped));
+      emit downloadStatsUpdated(jobId, m_dlFilesDownloaded, m_dlFilesSkipped,
+                                m_dlFilesTotal, m_dlSkippedTitles);
+      emit downloadProgress(jobId, 100, m_currentDownloadFile);
+      emit downloadFinished(jobId, outDir);
+    } else {
+      // Total failure — nothing downloaded at all
+      const QString errOut =
+          QString::fromUtf8(m_downloadProcess->readAllStandardError())
+              .trimmed();
+      VLOG_ERROR("YtDlpService", QString("Download error [%1] exit=%2: %3")
+                                     .arg(jobId)
+                                     .arg(exitCode)
+                                     .arg(errOut));
+      emit downloadError(jobId, errOut);
+    }
   } else {
-    VLOG_INFO("YtDlpService", "Download complete [" + jobId + "]");
+    // exitCode == 0: count last item as downloaded if not yet accounted for
+    if (m_dlFilesTotal > 0 &&
+        (m_dlFilesDownloaded + m_dlFilesSkipped) < m_dlFilesTotal) {
+      m_dlFilesDownloaded++;
+    }
+    VLOG_INFO("YtDlpService",
+              QString("Download complete [%1]: %2 ok, %3 skipped")
+                  .arg(jobId)
+                  .arg(m_dlFilesDownloaded)
+                  .arg(m_dlFilesSkipped));
+    emit downloadStatsUpdated(jobId, m_dlFilesDownloaded, m_dlFilesSkipped,
+                              m_dlFilesTotal, m_dlSkippedTitles);
     emit downloadProgress(jobId, 100, m_currentDownloadFile);
     emit downloadFinished(jobId, outDir);
   }
