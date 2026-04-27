@@ -70,7 +70,7 @@ VIBLI runs entirely in the **system tray** — no window pops up on launch.
 | | |
 |---|---|
 | **OS** | Windows 10 / 11 (64-bit) |
-| **Runtime** | Included in the release package (Qt DLLs, yt-dlp, ffmpeg) |
+| **Runtime** | Included in the release package (Qt DLLs, yt-dlp `2026.02.04`, ffmpeg `8.0.1`) |
 | **Codecs** | For MKV / FLAC / OPUS: install [LAV Filters](https://github.com/Nevcairiel/LAVFilters/releases) or [K-Lite Codec Pack](https://codecguide.com/download_kl.htm) |
 
 > **No installation required.** Just unzip the release and run `VIBLI.exe`.
@@ -189,5 +189,5 @@ src/
 ---
 
 <div align="center">
-  <sub>Built with ❤️ using Qt 6 · yt-dlp · ffmpeg</sub>
+  <sub>Built with ❤️ using Qt 6.11.0 · yt-dlp 2026.02.04 · ffmpeg 8.0.1</sub>
 </div>
