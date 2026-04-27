@@ -44,6 +44,7 @@ void PlaylistManager::clear() {
   m_shuffleOrder.clear();
   m_currentIndex = -1;
   emit playlistChanged();
+  emit playlistCleared();
 }
 
 int PlaylistManager::count() const { return m_tracks.size(); }

@@ -101,6 +101,12 @@ void MediaCache::invalidateStreamUrl(const QString &videoId) {
   }
 }
 
+void MediaCache::clearAll() {
+  m_streamEntries.clear();
+  saveStreamCacheFile();
+  VLOG_INFO("MediaCache", "Đã xóa toàn bộ stream URL cache");
+}
+
 void MediaCache::pruneExpiredStreamUrls() {
   const qint64 now = QDateTime::currentSecsSinceEpoch();
   int removed = 0;

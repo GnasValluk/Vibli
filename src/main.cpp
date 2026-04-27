@@ -253,6 +253,15 @@ int main(int argc, char *argv[]) {
                      persistence->save(playlistMgr->tracks());
                    });
 
+  // Save ngay khi user clear playlist (không chờ thoát app)
+  QObject::connect(playlistMgr, &PlaylistManager::playlistCleared, &app,
+                   [persistence, mediaCache]() {
+                     persistence->save({});  // ghi file rỗng ngay lập tức
+                     mediaCache->clearAll(); // xóa stream URL cache
+                     VLOG_INFO("App",
+                               "Playlist cleared – persistence & cache reset");
+                   });
+
   const QList<Track> savedTracks = persistence->load();
   if (!savedTracks.isEmpty()) {
     playlistMgr->addTracks(savedTracks);

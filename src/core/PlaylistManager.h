@@ -81,6 +81,7 @@ public slots:
 signals:
   void currentTrackChanged(int index, const Track &track);
   void playlistChanged();
+  void playlistCleared(); ///< Emit ngay khi clear — để persistence save ngay
 
 private:
   QList<Track> m_tracks;

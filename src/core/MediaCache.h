@@ -54,6 +54,9 @@ public:
   /** Xóa stream URL khỏi persistent cache. */
   void invalidateStreamUrl(const QString &videoId);
 
+  /** Xóa toàn bộ stream URL cache (in-memory + disk). */
+  void clearAll();
+
   // ── Paths ─────────────────────────────────────────────────────────────
   static QString cacheDir();        // %APPDATA%/VIBLI/
   static QString thumbnailDir();    // %APPDATA%/VIBLI/thumbnails/

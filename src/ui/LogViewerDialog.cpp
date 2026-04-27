@@ -101,8 +101,7 @@ LogViewerDialog::LogViewerDialog(QWidget *parent) : QDialog(parent) {
           &LogViewerDialog::onNewLog);
   connect(m_copyBtn, &QPushButton::clicked, this, &LogViewerDialog::onCopy);
   connect(m_exportBtn, &QPushButton::clicked, this, &LogViewerDialog::onExport);
-  connect(m_clearBtn, &QPushButton::clicked, m_logView, &QTextEdit::clear);
-
+  connect(m_clearBtn, &QPushButton::clicked, this, &LogViewerDialog::onClear);
   // Load log hiện có
   loadExistingLog();
 }
@@ -237,6 +236,13 @@ void LogViewerDialog::onCopy() {
   QTimer::singleShot(1500, this, [this]() { m_copyBtn->setText("  Copy"); });
 }
 
+void LogViewerDialog::onClear() {
+  // Xóa file log trên disk + reset UI
+  LogService::instance().clearLog();
+  m_logView->clear();
+  m_errorCount = 0;
+  updateCountLabel();
+}
 void LogViewerDialog::onExport() {
   const QString dst = QFileDialog::getSaveFileName(
       this, "Lưu log VIBLI", QDir::homePath() + "/vibli_log.txt",

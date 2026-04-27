@@ -7,7 +7,6 @@
 #include <QStandardPaths>
 #include <QTextStream>
 
-
 /**
  * @brief LogService – ghi log có cấu trúc, dedup tự động.
  *
@@ -96,10 +95,42 @@ public:
     return QString::fromUtf8(f.readAll());
   }
 
+  /** Xóa toàn bộ nội dung file log trên disk và reset dedup state. */
+  void clearLog() {
+    QMutexLocker lock(&m_mutex);
+
+    // Đóng file, truncate bằng resize(0), mở lại
+    m_file.close();
+    m_file.resize(
+        0); // truncate không cần open — không trigger nodiscard warning
+
+    // Mở lại ở chế độ Append để tiếp tục ghi
+    if (m_file.open(QIODevice::Append | QIODevice::Text)) {
+      m_stream.setDevice(&m_file);
+      m_stream.setEncoding(QStringConverter::Utf8);
+      const QString sep = QString("=").repeated(70);
+      m_stream << "\n"
+               << sep << "\n"
+               << QString("  Log cleared at %1\n")
+                      .arg(QDateTime::currentDateTime().toString(
+                          "yyyy-MM-dd HH:mm:ss"))
+               << sep << "\n";
+      m_stream.flush();
+    }
+
+    // Reset dedup state
+    m_lastKey.clear();
+    m_lastTime = 0;
+    m_dedupCount = 0;
+
+    emit logCleared();
+  }
+
 signals:
   void logged(LogService::Level level, const QString &component,
               const QString &message, const QString &timestamp);
   void errorLogged(); // emit khi có warn/error → UI hiện chấm đỏ
+  void logCleared();  // emit khi file log bị xóa
 
 private:
   static constexpr qint64 DEDUP_WINDOW_MS = 5000; // 5 giây

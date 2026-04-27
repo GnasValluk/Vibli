@@ -87,6 +87,11 @@ MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
         IconFont::icon(IconFont::DESCRIPTION, 14, QColor(255, 80, 80)));
     m_downloadLogBtn->setToolTip("⚠ Có lỗi – Click để xem log");
   });
+  connect(&LogService::instance(), &LogService::logCleared, this, [this]() {
+    m_downloadLogBtn->setIcon(
+        IconFont::icon(IconFont::DESCRIPTION, 14, QColor(100, 100, 100)));
+    m_downloadLogBtn->setToolTip("Xem log ứng dụng");
+  });
   connect(m_player, &AudioPlayer::errorOccurred, this,
           [this](const QString &errorMsg) {
             if (m_playlist->currentTrack().isYouTube)

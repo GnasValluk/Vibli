@@ -17,6 +17,7 @@ private slots:
                 const QString &message, const QString &timestamp);
   void onCopy();
   void onExport();
+  void onClear();
 
 private:
   void loadExistingLog();
