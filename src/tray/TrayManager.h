@@ -1,47 +1,47 @@
 #pragma once
 
+#include <QAction>
+#include <QMenu>
 #include <QObject>
 #include <QSystemTrayIcon>
-#include <QMenu>
-#include <QAction>
+
 
 /**
- * @brief TrayManager – quản lý system tray icon và context menu.
+ * @brief TrayManager – manages the system tray icon and context menu.
  *
- * Click vào tray icon → toggle MiniPlayer overlay.
- * Double-click → mở MainWindow.
+ * Click on tray icon → toggle MiniPlayer overlay.
+ * Double-click → open MainWindow.
  */
-class TrayManager : public QObject
-{
-    Q_OBJECT
+class TrayManager : public QObject {
+  Q_OBJECT
 
 public:
-    explicit TrayManager(QObject *parent = nullptr);
-    ~TrayManager() override = default;
+  explicit TrayManager(QObject *parent = nullptr);
+  ~TrayManager() override = default;
 
-    void show();
+  void show();
 
 signals:
-    void toggleOverlayRequested();
-    void showMainWindowRequested();
-    void playPauseRequested();
-    void nextTrackRequested();
-    void previousTrackRequested();
-    void quitRequested();
+  void toggleOverlayRequested();
+  void showMainWindowRequested();
+  void playPauseRequested();
+  void nextTrackRequested();
+  void previousTrackRequested();
+  void quitRequested();
 
 public slots:
-    void updatePlaybackState(bool playing);
-    void updateTrackTitle(const QString &title);
+  void updatePlaybackState(bool playing);
+  void updateTrackTitle(const QString &title);
 
 private slots:
-    void onTrayActivated(QSystemTrayIcon::ActivationReason reason);
+  void onTrayActivated(QSystemTrayIcon::ActivationReason reason);
 
 private:
-    void buildMenu();
+  void buildMenu();
 
-    QSystemTrayIcon *m_trayIcon;
-    QMenu           *m_menu;
+  QSystemTrayIcon *m_trayIcon;
+  QMenu *m_menu;
 
-    QAction *m_playPauseAction;
-    QAction *m_trackTitleAction;
+  QAction *m_playPauseAction;
+  QAction *m_trackTitleAction;
 };

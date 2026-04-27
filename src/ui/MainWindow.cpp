@@ -17,7 +17,8 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
-// ── Định dạng hỗ trợ ─────────────────────────────────────────────────────────
+// ── Supported formats
+// ─────────────────────────────────────────────────────────
 static const QSet<QString> AUDIO_EXTENSIONS = {
     "mp3",  "flac", "wav", "ogg", "aac", "m4a", "opus", "wma",
     "aiff", "aif",  "ape", "wv",  "dsf", "dff", "mka"};
@@ -39,7 +40,7 @@ MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
   m_loadingOverlay = new LoadingOverlay(centralWidget());
 
   // ── Playlist signals ───────────────────────────────────────────────────
-  // playlistChanged được xử lý bởi PlaylistModel trực tiếp
+  // playlistChanged is handled directly by PlaylistModel
   connect(m_playlist, &PlaylistManager::currentTrackChanged, this,
           &MainWindow::onCurrentTrackChanged);
   connect(m_player, &AudioPlayer::metadataChanged, this,
@@ -47,15 +48,16 @@ MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
 
   // ── YouTube import ─────────────────────────────────────────────────────
   connect(m_importer, &PlaylistImporter::importStarted, this, [this]() {
-    m_loadingOverlay->start("Đang tải playlist...");
-    m_statusLabel->setText("Đang tải playlist...");
+    m_loadingOverlay->start("Loading playlist...");
+    m_statusLabel->setText("Loading playlist...");
     m_importYtBtn->setEnabled(false);
   });
   connect(
       m_importer, &PlaylistImporter::trackImported, this, [this](int loaded) {
         m_loadingOverlay->setProgress(loaded, -1);
-        m_loadingOverlay->setMessage(QString("Đã tải %1 track...").arg(loaded));
-        m_statusLabel->setText(QString("Đang tải... (%1 track)").arg(loaded));
+        m_loadingOverlay->setMessage(
+            QString("Loaded %1 tracks...").arg(loaded));
+        m_statusLabel->setText(QString("Loading... (%1 tracks)").arg(loaded));
       });
   connect(m_importer, &PlaylistImporter::importFinished, this,
           [this](int count) {
@@ -72,8 +74,8 @@ MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
           [this](const QString &reason) {
             m_loadingOverlay->stop();
             m_importYtBtn->setEnabled(true);
-            m_statusLabel->setText("Lỗi import.");
-            QMessageBox::critical(this, "Lỗi Import YouTube", reason);
+            m_statusLabel->setText("Import failed.");
+            QMessageBox::critical(this, "YouTube Import Error", reason);
           });
   connect(m_ytDlpService, &YtDlpService::progressUpdated, this,
           [this](const QString &msg) {
@@ -85,28 +87,28 @@ MainWindow::MainWindow(AudioPlayer *player, PlaylistManager *playlist,
   connect(&LogService::instance(), &LogService::errorLogged, this, [this]() {
     m_downloadLogBtn->setIcon(
         IconFont::icon(IconFont::DESCRIPTION, 14, QColor(255, 80, 80)));
-    m_downloadLogBtn->setToolTip("⚠ Có lỗi – Click để xem log");
+    m_downloadLogBtn->setToolTip("⚠ Error detected – Click to view log");
   });
   connect(&LogService::instance(), &LogService::logCleared, this, [this]() {
     m_downloadLogBtn->setIcon(
         IconFont::icon(IconFont::DESCRIPTION, 14, QColor(100, 100, 100)));
-    m_downloadLogBtn->setToolTip("Xem log ứng dụng");
+    m_downloadLogBtn->setToolTip("View application log");
   });
   connect(m_player, &AudioPlayer::errorOccurred, this,
           [this](const QString &errorMsg) {
             if (m_playlist->currentTrack().isYouTube)
-              m_statusLabel->setText("⚠ Lỗi phát: " + errorMsg.left(80));
+              m_statusLabel->setText("⚠ Playback error: " + errorMsg.left(80));
           });
   connect(m_player, &AudioPlayer::recoverableErrorOccurred, this,
           [this](const QString &errorMsg) {
-            // Chỉ log nhẹ ở status bar, không làm phiền user
-            // Coordinator trong main.cpp sẽ tự retry
+            // Just show a light status bar message, don't bother the user
+            // Coordinator in main.cpp will handle the retry
             if (m_playlist->currentTrack().isYouTube)
-              m_statusLabel->setText("↻ Đang thử lại...");
+              m_statusLabel->setText("↻ Retrying...");
             Q_UNUSED(errorMsg)
           });
 
-  // ── Status label update khi playlist thay đổi ─────────────────────────
+  // ── Status label update when playlist changes ──────────────────────────
   connect(m_playlist, &PlaylistManager::playlistChanged, this, [this]() {
     const int n = m_playlist->count();
     m_statusLabel->setText(
@@ -148,9 +150,8 @@ void MainWindow::setupUi() {
   m_playlistView->setItemDelegate(m_playlistDelegate);
   m_playlistView->setSelectionMode(QAbstractItemView::ExtendedSelection);
   m_playlistView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-  m_playlistView->setUniformItemSizes(
-      true);                              // tất cả item cùng height → nhanh hơn
-  m_playlistView->setMouseTracking(true); // để hover state hoạt động
+  m_playlistView->setUniformItemSizes(true); // all items same height → faster
+  m_playlistView->setMouseTracking(true);    // needed for hover state
 
   // ── Buttons ───────────────────────────────────────────────────────────
   m_addFolderBtn = new QPushButton("  Add Folder", central);
@@ -178,7 +179,7 @@ void MainWindow::setupUi() {
 
   m_downloadLogBtn = new QPushButton(central);
   m_downloadLogBtn->setObjectName("logBtn");
-  m_downloadLogBtn->setToolTip("Xem log ứng dụng");
+  m_downloadLogBtn->setToolTip("View application log");
   m_downloadLogBtn->setFixedSize(28, 28);
   m_downloadLogBtn->setIcon(
       IconFont::icon(IconFont::DESCRIPTION, 14, QColor(100, 100, 100)));
@@ -343,7 +344,7 @@ void MainWindow::onAddFolder() {
 void MainWindow::onRemoveSelected() {
   const QModelIndexList selected =
       m_playlistView->selectionModel()->selectedIndexes();
-  // Xóa từ index lớn nhất xuống để không bị lệch index
+  // Remove from highest index down to avoid index shifting
   QList<int> rows;
   for (const QModelIndex &idx : selected)
     rows.append(idx.row());
@@ -380,23 +381,23 @@ void MainWindow::onImportYouTube() {
 }
 
 void MainWindow::startDownload(const QString &url, DownloadFormat format) {
-  // Chọn thư mục lưu
+  // Choose output directory
   const QString outputDir = QFileDialog::getExistingDirectory(
-      this, "Chọn thư mục lưu file", QDir::homePath(),
+      this, "Select Output Folder", QDir::homePath(),
       QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
   if (outputDir.isEmpty())
     return;
 
-  // Tạo job
+  // Create job
   DownloadJob job;
   job.url = url;
   job.format = format;
   job.outputDir = outputDir;
   job.jobId = QString::number(QDateTime::currentMSecsSinceEpoch());
 
-  // Label ngắn gọn: chỉ lấy phần cuối URL hoặc "YouTube Playlist"
+  // Short label: just take the end of the URL or "YouTube Playlist"
   QString shortUrl = url;
-  // Cắt bỏ scheme và www
+  // Strip scheme and www
   shortUrl.remove(QRegularExpression(
       R"(^https?://(www\.)?)", QRegularExpression::CaseInsensitiveOption));
   // Giới hạn 50 ký tự
@@ -404,7 +405,7 @@ void MainWindow::startDownload(const QString &url, DownloadFormat format) {
     shortUrl = shortUrl.left(47) + "...";
   const QString label = shortUrl;
 
-  // Lazy-create dialog (non-modal, tồn tại suốt vòng đời MainWindow)
+  // Lazy-create dialog (non-modal, lives for the lifetime of MainWindow)
   if (!m_downloadManager)
     m_downloadManager = new DownloadManagerDialog(m_ytDlpService, this);
 
@@ -425,7 +426,7 @@ void MainWindow::onPlaylistItemDoubleClicked(const QModelIndex &index) {
 }
 
 void MainWindow::onCurrentTrackChanged(int index, const Track &track) {
-  // Highlight row đang phát
+  // Highlight the currently playing row
   const QModelIndex modelIdx = m_playlistModel->index(index);
   m_playlistView->setCurrentIndex(modelIdx);
   m_playlistView->scrollTo(modelIdx, QAbstractItemView::EnsureVisible);
@@ -452,7 +453,7 @@ void MainWindow::onMetadataChanged(const QString &title, const QString &artist,
   if (t.isYouTube)
     return;
 
-  // Cập nhật nowPlaying label
+  // Update nowPlaying label
   const QString displayTitle = title.isEmpty() ? t.title : title;
   const QString displayArtist = artist.isEmpty() ? t.artist : artist;
   const QString display = displayArtist.isEmpty()
@@ -460,20 +461,21 @@ void MainWindow::onMetadataChanged(const QString &title, const QString &artist,
                               : displayArtist + " – " + displayTitle;
   m_nowPlayingLabel->setText((t.isVideo ? "🎬  " : "♪  ") + display);
 
-  // Invalidate model row để delegate vẽ lại text
+  // Invalidate model row so delegate redraws the text
   const QModelIndex modelIdx = m_playlistModel->index(idx);
   emit m_playlistModel->dataChanged(modelIdx, modelIdx, {Qt::DisplayRole});
 }
 
 void MainWindow::onThumbnailReady(const QString &videoId) {
-  // Delegate lấy từ ThumbnailCache trực tiếp — chỉ cần invalidate model row
+  // Delegate fetches directly from ThumbnailCache — just invalidate the model
+  // row
   m_playlistModel->onThumbnailReady(videoId);
 }
 
 void MainWindow::onDownloadLog() {
   m_downloadLogBtn->setIcon(
       IconFont::icon(IconFont::DESCRIPTION, 14, QColor(100, 100, 100)));
-  m_downloadLogBtn->setToolTip("Xem log ứng dụng");
+  m_downloadLogBtn->setToolTip("View application log");
   LogViewerDialog dlg(this);
   dlg.exec();
 }

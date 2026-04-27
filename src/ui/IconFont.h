@@ -10,14 +10,14 @@
 #include <qdebug.h>
 
 /**
- * @brief IconFont – Material Symbols Rounded dùng codepoint trực tiếp.
+ * @brief IconFont – Material Symbols Rounded using direct codepoints.
  *
- * Codepoint lấy từ cmap của font file (Private Use Area).
- * Render thành QIcon qua QPainter để dùng cho QPushButton, QListWidget.
+ * Codepoints read from the font file's cmap (Private Use Area).
+ * Rendered as QIcon via QPainter for use in QPushButton, QListWidget.
  */
 namespace IconFont {
 
-// ── Codepoints (đọc từ font cmap) ────────────────────────────────────────────
+// ── Codepoints (read from font cmap) ─────────────────────────────────────────
 constexpr char32_t PLAY_ARROW = 0x0E037;
 constexpr char32_t PAUSE = 0x0E034;
 constexpr char32_t SKIP_NEXT = 0x0E044;
@@ -39,14 +39,14 @@ constexpr char32_t DOWNLOAD = 0x0E2C4;
 constexpr char32_t DESCRIPTION = 0x0E873;
 
 inline void init() {
-  // Ưu tiên load từ Qt resource (embedded) — đảm bảo hoạt động cả debug lẫn
+  // Prefer loading from Qt resource (embedded) — works in both debug and
   // release
   int id =
       QFontDatabase::addApplicationFont(":/fonts/MaterialSymbolsRounded.ttf");
   if (id >= 0) {
     return; // loaded from resource
   }
-  // Fallback: load từ file cạnh exe (legacy / dev build)
+  // Fallback: load from file next to exe (legacy / dev build)
   const QString fontPath =
       QCoreApplication::applicationDirPath() + "/MaterialSymbolsRounded.ttf";
   id = QFontDatabase::addApplicationFont(fontPath);
@@ -62,12 +62,12 @@ inline QFont rawFont(int pixelSize = 20) {
   return f;
 }
 
-// Chuyển codepoint → QString
+// Convert codepoint → QString
 inline QString cp(char32_t codepoint) {
   return QString::fromUcs4(&codepoint, 1);
 }
 
-// Render codepoint thành QIcon với nền trong suốt
+// Render codepoint as QIcon with transparent background
 inline QIcon icon(char32_t codepoint, int size = 20,
                   QColor color = QColor(204, 204, 204)) {
   const int dpr = 2;
@@ -85,7 +85,7 @@ inline QIcon icon(char32_t codepoint, int size = 20,
   return QIcon(pm);
 }
 
-// QIcon với 2 trạng thái normal / active (hover)
+// QIcon with two states: normal / active (hover)
 inline QIcon iconDual(char32_t codepoint, int size = 20,
                       QColor normal = QColor(204, 204, 204),
                       QColor active = QColor(255, 255, 255)) {

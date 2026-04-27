@@ -5,13 +5,13 @@
 #include <QTimer>
 #include <QWidget>
 
-
 /**
- * @brief LoadingOverlay – progress bar mỏng kiểu iOS ở top của parent widget.
+ * @brief LoadingOverlay – thin iOS-style progress bar at the top of the parent
+ * widget.
  *
- * - Khi total = -1: indeterminate (shimmer chạy qua lại)
- * - Khi total > 0:  determinate (fill theo %)
- * - Tự ẩn với fade-out khi stop()
+ * - When total = -1: indeterminate (shimmer runs back and forth)
+ * - When total > 0:  determinate (fills by percentage)
+ * - Auto-hides with fade-out when stop() is called
  */
 class LoadingOverlay : public QWidget {
   Q_OBJECT
@@ -43,13 +43,13 @@ protected:
   void resizeEvent(QResizeEvent *) override;
 
 private:
-  static constexpr int BAR_H = 3; // chiều cao bar (px)
+  static constexpr int BAR_H = 3; // bar height (px)
 
   QTimer *m_shimmerTimer;
   QPropertyAnimation *m_fadeAnim;
   QLabel *m_label;
 
-  qreal m_shimmerPos = 0.0; // 0.0 → 1.0, vị trí shimmer
+  qreal m_shimmerPos = 0.0; // 0.0 → 1.0, shimmer position
   qreal m_opacity = 1.0;
   int m_loaded = 0;
   int m_total = -1; // -1 = indeterminate

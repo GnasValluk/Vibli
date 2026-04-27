@@ -11,17 +11,17 @@
 #include "../core/YtDlpService.h"
 
 /**
- * @brief Trạng thái của một download job.
+ * @brief State of a download job.
  */
 enum class JobState { Queued, Downloading, Done, Cancelled, Failed };
 
 /**
- * @brief Widget hiển thị một download job.
+ * @brief Widget displaying a single download job.
  *
  * Layout:
  *  ┌─────────────────────────────────────────────────────┐
- *  │ [badge] Tên hiển thị ngắn gọn          [Hủy / Mở]  │
- *  │ ▸ Tên file đang tải (elided)                        │
+ *  │ [badge] Short display name                [Cancel / Open]  │
+ *  │ ▸ File name being downloaded (elided)               │
  *  │ ████████████░░░░░░░░  45%   1.2 MB/s  ETA 0:32     │
  *  └─────────────────────────────────────────────────────┘
  */
@@ -52,8 +52,8 @@ private:
   JobState m_state = JobState::Queued;
 
   QLabel *m_badgeLabel; ///< "MP3" / "MP4"
-  QLabel *m_titleLabel; ///< Tên ngắn, elided
-  QLabel *m_fileLabel;  ///< Tên file đang tải
+  QLabel *m_titleLabel; ///< Short name, elided
+  QLabel *m_fileLabel;  ///< Name of file being downloaded
   QLabel *m_metaLabel;  ///< Speed + ETA
   QProgressBar *m_progressBar;
   QPushButton *m_actionBtn;
@@ -62,10 +62,11 @@ private:
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * @brief DownloadManagerDialog – dialog non-modal quản lý download jobs.
+ * @brief DownloadManagerDialog – non-modal dialog for managing download jobs.
  *
- * Header bar hiển thị tổng số job / đang chạy.
- * Mỗi job có widget riêng với progress bar, speed, ETA, nút Hủy / Mở thư mục.
+ * Header bar shows total jobs / running count.
+ * Each job has its own widget with progress bar, speed, ETA, Cancel / Open
+ * folder button.
  */
 class DownloadManagerDialog : public QDialog {
   Q_OBJECT
@@ -76,9 +77,9 @@ public:
   ~DownloadManagerDialog() override = default;
 
   /**
-   * Thêm job mới và bắt đầu download.
-   * @param job           Job đầy đủ thông tin (kể cả jobId).
-   * @param displayLabel  Tên ngắn hiển thị (ví dụ: "Lofi Playlist").
+   * Adds a new job and starts the download.
+   * @param job           Full job info (including jobId).
+   * @param displayLabel  Short display name (e.g. "Lofi Playlist").
    */
   void addJob(const DownloadJob &job, const QString &displayLabel);
 
@@ -95,7 +96,7 @@ private:
 
   YtDlpService *m_service;
 
-  QLabel *m_headerLabel; ///< "X đang tải  •  Y hoàn tất"
+  QLabel *m_headerLabel; ///< "X downloading  •  Y completed"
   QWidget *m_listContainer;
   QVBoxLayout *m_listLayout;
   QLabel *m_emptyLabel;

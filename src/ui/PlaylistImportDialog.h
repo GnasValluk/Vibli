@@ -6,21 +6,21 @@
 #include <QPushButton>
 
 /**
- * @brief Chế độ người dùng chọn khi đóng dialog.
+ * @brief Action selected by the user when closing the dialog.
  */
 enum class ImportAction {
-  ImportPlaylist, ///< Thêm playlist vào thư viện (OK)
-  DownloadMp3,    ///< Tải xuống dạng MP3
-  DownloadMp4,    ///< Tải xuống dạng MP4
+  ImportPlaylist, ///< Add playlist to library (OK)
+  DownloadMp3,    ///< Download as MP3
+  DownloadMp4,    ///< Download as MP4
 };
 
 /**
- * @brief PlaylistImportDialog – hộp thoại nhập URL YouTube playlist.
+ * @brief PlaylistImportDialog – dialog for entering a YouTube playlist URL.
  *
  * Layout:
- *  - QLineEdit nhập URL
- *  - QLabel hiển thị lỗi inline (ẩn khi hợp lệ)
- *  - Nút OK (Import), Download MP3, Download MP4, và Cancel
+ *  - QLineEdit for URL input
+ *  - QLabel for inline error display (hidden when valid)
+ *  - Buttons: OK (Import), Download MP3, Download MP4, and Cancel
  */
 class PlaylistImportDialog : public QDialog {
   Q_OBJECT
@@ -31,8 +31,8 @@ public:
 
   QString playlistUrl() const;
 
-  /** Trả về hành động người dùng đã chọn (chỉ hợp lệ khi exec() == Accepted).
-   */
+  /** Returns the action selected by the user (only valid when exec() ==
+   * Accepted). */
   ImportAction selectedAction() const { return m_selectedAction; }
 
 private slots:

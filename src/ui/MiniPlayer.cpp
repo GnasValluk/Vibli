@@ -30,7 +30,7 @@ MiniPlayer::MiniPlayer(AudioPlayer *player, PlaylistManager *playlist,
   connect(m_player, &AudioPlayer::videoAvailableChanged, this,
           &MiniPlayer::onVideoAvailableChanged);
 
-  // Metadata thật từ file
+  // Real metadata from file
   connect(m_player, &AudioPlayer::metadataChanged, this,
           [this](const QString &title, const QString &artist, const QString &) {
             if (!title.isEmpty())
@@ -52,13 +52,13 @@ void MiniPlayer::setupUi() {
   m_thumbStack = new QStackedWidget(this);
   m_thumbStack->setFixedSize(THUMB_SIZE, THUMB_SIZE);
 
-  // Trang 0: audio/YouTube thumbnail — bo góc thật
+  // Page 0: audio/YouTube thumbnail — true rounded corners
   m_audioArt = new RoundedImageWidget(10, m_thumbStack);
   m_audioArt->setFixedSize(THUMB_SIZE, THUMB_SIZE);
   m_audioArt->setPlaceholderText("♪");
   m_audioArt->setObjectName("audioArt");
 
-  // Trang 1: video thumbnail – crop center, bo góc, không bóp méo
+  // Page 1: video thumbnail – center crop, rounded corners, no stretching
   m_videoThumb = new VideoThumbnail(m_thumbStack);
   m_videoThumb->setFixedSize(THUMB_SIZE, THUMB_SIZE);
   m_videoThumb->setObjectName("videoThumb");
@@ -67,7 +67,7 @@ void MiniPlayer::setupUi() {
   m_thumbStack->addWidget(m_videoThumb); // index 1
   m_thumbStack->setCurrentIndex(0);
 
-  // Gắn video output vào thumbnail
+  // Attach video output to thumbnail
   m_videoThumb->setMediaPlayer(m_player->mediaPlayer());
 
   // ── Track info ────────────────────────────────────────────────────────
@@ -118,17 +118,17 @@ void MiniPlayer::setupUi() {
   m_shuffleBtn->setIcon(
       IconFont::icon(IconFont::SHUFFLE, 14, QColor(100, 100, 100)));
   m_shuffleBtn->setIconSize({14, 14});
-  m_shuffleBtn->setToolTip("Trộn bài");
+  m_shuffleBtn->setToolTip("Shuffle");
   m_repeatBtn->setIcon(
       IconFont::icon(IconFont::REPEAT, 14, QColor(100, 100, 100)));
   m_repeatBtn->setIconSize({14, 14});
-  m_repeatBtn->setToolTip("Lặp: Tắt");
+  m_repeatBtn->setToolTip("Repeat: Off");
 
-  // ── Volume slider — ngắn hơn ──────────────────────────────────────────
+  // ── Volume slider — shorter ───────────────────────────────────────────
   m_volumeSlider = new QSlider(Qt::Horizontal, this);
   m_volumeSlider->setRange(0, 100);
   m_volumeSlider->setValue(80);
-  m_volumeSlider->setFixedWidth(44); // giảm từ 60 → 44
+  m_volumeSlider->setFixedWidth(44); // reduced from 60 → 44
   m_volumeSlider->setObjectName("volumeSlider");
 
   // ── Layouts ───────────────────────────────────────────────────────────
@@ -267,12 +267,12 @@ void MiniPlayer::paintEvent(QPaintEvent *event) {
   QPainter painter(this);
   painter.setRenderHint(QPainter::Antialiasing);
 
-  // Nền mờ toàn widget
+  // Semi-transparent background for the whole widget
   QPainterPath bg;
   bg.addRoundedRect(rect(), 14, 14);
   painter.fillPath(bg, QColor(18, 18, 18, 220));
 
-  // Border cho thumbnail (vẽ đè lên trên video/audio art)
+  // Border around thumbnail (drawn on top of video/audio art)
   const QRect thumbRect = m_thumbStack->geometry();
   QPainterPath thumbBorder;
   thumbBorder.addRoundedRect(thumbRect.adjusted(-1, -1, 1, 1), 11, 11);
@@ -283,7 +283,7 @@ void MiniPlayer::paintEvent(QPaintEvent *event) {
 // ─────────────────────────────────────────────────────────────────────
 
 void MiniPlayer::onVideoAvailableChanged(bool available) {
-  // Chuyển thumbnail: video hoặc audio art
+  // Switch thumbnail: video or audio art
   m_thumbStack->setCurrentIndex(available ? 1 : 0);
 }
 
@@ -315,7 +315,7 @@ void MiniPlayer::updateTrackInfo(const Track &track) {
 }
 
 void MiniPlayer::onThumbnailReady(const QString &videoId) {
-  // Chỉ cập nhật nếu đây là track đang hiển thị
+  // Only update if this is the currently displayed track
   if (videoId != m_currentVideoId || !m_thumbCache)
     return;
   const QPixmap px = m_thumbCache->get(videoId);
@@ -369,10 +369,10 @@ void MiniPlayer::onShuffleClicked() {
   const bool newShuffle = !m_playlist->isShuffle();
   m_playlist->setShuffle(newShuffle);
 
-  // Icon sáng khi bật, tối khi tắt
+  // Bright icon when on, dim when off
   const QColor c = newShuffle ? QColor(29, 185, 84) : QColor(100, 100, 100);
   m_shuffleBtn->setIcon(IconFont::icon(IconFont::SHUFFLE, 14, c));
-  m_shuffleBtn->setToolTip(newShuffle ? "Trộn bài: Bật" : "Trộn bài: Tắt");
+  m_shuffleBtn->setToolTip(newShuffle ? "Shuffle: On" : "Shuffle: Off");
 }
 
 void MiniPlayer::onRepeatClicked() {
@@ -393,22 +393,22 @@ void MiniPlayer::onRepeatClicked() {
   }
   m_playlist->setRepeatMode(next);
 
-  // Cập nhật icon và tooltip
+  // Update icon and tooltip
   switch (next) {
   case RM::All:
     m_repeatBtn->setIcon(
         IconFont::icon(IconFont::REPEAT, 14, QColor(29, 185, 84)));
-    m_repeatBtn->setToolTip("Lặp: Toàn bộ");
+    m_repeatBtn->setToolTip("Repeat: All");
     break;
   case RM::One:
     m_repeatBtn->setIcon(
         IconFont::icon(IconFont::REPEAT_ONE, 14, QColor(29, 185, 84)));
-    m_repeatBtn->setToolTip("Lặp: 1 bài");
+    m_repeatBtn->setToolTip("Repeat: One");
     break;
   default:
     m_repeatBtn->setIcon(
         IconFont::icon(IconFont::REPEAT, 14, QColor(100, 100, 100)));
-    m_repeatBtn->setToolTip("Lặp: Tắt");
+    m_repeatBtn->setToolTip("Repeat: Off");
     break;
   }
 }

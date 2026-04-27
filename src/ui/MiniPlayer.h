@@ -33,7 +33,7 @@ public slots:
   void updatePlaybackState(bool playing);
   void updatePosition(qint64 posMs);
   void updateDuration(qint64 durMs);
-  /** Gọi khi thumbnail của videoId vừa sẵn sàng trong ThumbnailCache. */
+  /** Called when the thumbnail for videoId is ready in ThumbnailCache. */
   void onThumbnailReady(const QString &videoId);
 
 private slots:
@@ -60,7 +60,6 @@ private:
   QStackedWidget *m_thumbStack;
   RoundedImageWidget *m_audioArt;
   VideoThumbnail *m_videoThumb;
-
   // ── Info & controls ───────────────────────────────────────────────────
   QLabel *m_titleLabel;
   QLabel *m_artistLabel;
@@ -75,5 +74,5 @@ private:
   QSlider *m_volumeSlider;
 
   bool m_seeking = false;
-  QString m_currentVideoId; // videoId của track đang hiển thị
+  QString m_currentVideoId; // videoId of the currently displayed track
 };

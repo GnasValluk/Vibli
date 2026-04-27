@@ -13,38 +13,39 @@
 #include "MediaCache.h"
 #include "PlaylistManager.h"
 
-/** Định dạng file khi download. */
+/** Download format for media files. */
 enum class DownloadFormat { Mp3, Mp4 };
 
 /**
- * @brief Mô tả một download job.
+ * @brief Describes a download job.
  *
- * Truyền vào YtDlpService::downloadMedia() để bắt đầu tải.
+ * Pass to YtDlpService::downloadMedia() to start a download.
  */
 struct DownloadJob {
-  QString url; ///< URL playlist hoặc video YouTube
+  QString url; ///< YouTube playlist or video URL
   DownloadFormat format = DownloadFormat::Mp3;
-  QString outputDir; ///< Thư mục lưu file (phải tồn tại)
-  QString jobId;     ///< UUID do caller tạo để track tiến trình
+  QString outputDir; ///< Output directory (must exist)
+  QString jobId;     ///< UUID created by caller to track progress
 };
 
 /**
- * @brief YtDlpService – giao tiếp với yt-dlp.exe qua QProcess.
+ * @brief YtDlpService – communicates with yt-dlp.exe via QProcess.
  *
  * Stream URL resolution:
- *  - Format priority: m4a → webm/opus → best  (tránh demux fail trên Windows)
- *  - Queue: nhiều videoId có thể được enqueue, xử lý tuần tự
- *  - Pre-resolve: gọi prefetchStreamUrl() để resolve sẵn track tiếp theo
- *  - Retry với format fallback khi primary format fail
+ *  - Format priority: m4a → webm/opus → best  (avoids demux failures on
+ * Windows)
+ *  - Queue: multiple videoIds can be enqueued and processed sequentially
+ *  - Pre-resolve: call prefetchStreamUrl() to resolve the next track in advance
+ *  - Retry with format fallback when primary format fails
  *
- * Cache 2 lớp:
- *  - In-memory (QMap): nhanh nhất, mất khi thoát app
- *  - Persistent (MediaCache): lưu disk, TTL 6h, sống qua restart
+ * Two-layer cache:
+ *  - In-memory (QMap): fastest, lost on app exit
+ *  - Persistent (MediaCache): saved to disk, TTL 6h, survives restarts
  *
  * Download:
- *  - downloadMedia() chạy yt-dlp với --newline để parse progress từng dòng
- *  - Mỗi job có jobId riêng; nhiều job có thể xếp hàng
- *  - cancelDownload() hủy job đang chạy hoặc xóa khỏi queue
+ *  - downloadMedia() runs yt-dlp with --newline to parse per-line progress
+ *  - Each job has a unique jobId; multiple jobs can be queued
+ *  - cancelDownload() cancels the running job or removes it from the queue
  */
 class YtDlpService : public QObject {
   Q_OBJECT
@@ -59,35 +60,35 @@ public:
   void fetchPlaylistMetadata(const QString &playlistUrl);
 
   /**
-   * Resolve stream URL cho videoId.
-   * Nếu đang bận, enqueue và xử lý sau.
-   * Kết quả trả về qua signal streamUrlReady / streamErrorOccurred.
+   * Resolves the stream URL for a videoId.
+   * If busy, enqueues and processes later.
+   * Result is returned via streamUrlReady / streamErrorOccurred signals.
    */
   void resolveStreamUrl(const QString &videoId);
 
   /**
-   * Pre-fetch stream URL cho track tiếp theo ở background.
-   * Không emit signal nếu đã có trong cache.
-   * Ưu tiên thấp hơn resolveStreamUrl.
+   * Pre-fetches the stream URL for the next track in the background.
+   * Does not emit a signal if already cached.
+   * Lower priority than resolveStreamUrl.
    */
   void prefetchStreamUrl(const QString &videoId);
 
   void invalidateStreamCache(const QString &videoId);
 
   /**
-   * Bắt đầu download job (async).
-   * Tiến trình trả về qua downloadProgress / downloadFinished / downloadError.
-   * Nếu đang bận, job được xếp hàng và xử lý tuần tự.
+   * Starts a download job (async).
+   * Progress is reported via downloadProgress / downloadFinished /
+   * downloadError. If busy, the job is queued and processed sequentially.
    */
   void downloadMedia(const DownloadJob &job);
 
   /**
-   * Hủy job đang chạy hoặc xóa khỏi queue.
-   * Nếu job đang chạy, process bị kill và downloadError được emit.
+   * Cancels the running job or removes it from the queue.
+   * If the job is running, the process is killed and downloadError is emitted.
    */
   void cancelDownload(const QString &jobId);
 
-  // Parser (public để test độc lập)
+  // Parser (public for independent testing)
   std::optional<Track> parseVideoJson(const QJsonObject &obj) const;
 
 signals:
@@ -101,14 +102,16 @@ signals:
   void progressUpdated(const QString &statusMessage);
 
   // ── Download signals ───────────────────────────────────────────────────
-  /** Tiến trình download: 0-100, currentFile là tên file đang tải. */
+  /** Download progress: 0-100, currentFile is the name of the file being
+   * downloaded. */
   void downloadProgress(const QString &jobId, int percent,
                         const QString &currentFile);
-  /** Download hoàn tất; outputDir là thư mục chứa file đã tải. */
+  /** Download complete; outputDir is the folder containing the downloaded file.
+   */
   void downloadFinished(const QString &jobId, const QString &outputDir);
-  /** Download thất bại (lỗi thật, không phải do user hủy). */
+  /** Download failed (real error, not user-cancelled). */
   void downloadError(const QString &jobId, const QString &errorMessage);
-  /** Download bị hủy bởi user. */
+  /** Download cancelled by user. */
   void downloadCancelled(const QString &jobId);
 
 private slots:
@@ -120,7 +123,7 @@ private slots:
   void onDownloadProcessFinished(int exitCode, QProcess::ExitStatus status);
 
 private:
-  // Format selector theo thứ tự ưu tiên
+  // Format selector in priority order
   // Index 0 = primary, 1 = fallback 1, 2 = fallback 2
   static const QStringList FORMAT_PRIORITY;
 
@@ -147,9 +150,9 @@ private:
   QQueue<StreamRequest> m_streamQueue;
   bool m_streamBusy = false;
 
-  // Retry state cho request đang xử lý
+  // Retry state for the current request
   QString m_pendingVideoId;
-  int m_pendingFormatIdx = 0; // index vào FORMAT_PRIORITY
+  int m_pendingFormatIdx = 0; // index into FORMAT_PRIORITY
   bool m_pendingIsPrefetch = false;
 
   QByteArray m_metadataBuffer;
@@ -159,7 +162,8 @@ private:
   QProcess *m_downloadProcess = nullptr;
   QQueue<DownloadJob> m_downloadQueue;
   bool m_downloadBusy = false;
-  bool m_downloadCancelled = false; ///< true khi job bị hủy bởi user
-  DownloadJob m_activeDownload;     ///< Job đang chạy
-  QString m_currentDownloadFile;    ///< Tên file đang tải (từ stdout)
+  bool m_downloadCancelled = false; ///< true when job was cancelled by user
+  DownloadJob m_activeDownload;     ///< Currently running job
+  QString m_currentDownloadFile;    ///< Name of the file being downloaded (from
+                                    ///< stdout)
 };

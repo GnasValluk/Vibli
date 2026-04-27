@@ -8,16 +8,16 @@
 #include <QTextStream>
 
 /**
- * @brief LogService – ghi log có cấu trúc, dedup tự động.
+ * @brief LogService – structured logger with automatic deduplication.
  *
  * Format:
- *   [2026-04-26 14:32:01.123] ✅ INFO    | AudioPlayer | Bắt đầu phát: song.mp3
- *   [2026-04-26 14:32:05.456] ⚠️  WARN   | YtDlpService | Stream URL hết hạn
- *   [2026-04-26 14:32:06.789] ❌ ERROR   | AudioPlayer | Demuxing failed  (×47
- * lần trong 2s)
+ *   [2026-04-26 14:32:01.123] ✅ INFO    | AudioPlayer | Started playing:
+ * song.mp3 [2026-04-26 14:32:05.456] ⚠️  WARN   | YtDlpService | Stream URL
+ * expired [2026-04-26 14:32:06.789] ❌ ERROR   | AudioPlayer | Demuxing failed
+ * (×47 times in 2s)
  *
- * Dedup: cùng component + message trong vòng DEDUP_WINDOW_MS → gộp thành 1
- * dòng.
+ * Dedup: same component + message within DEDUP_WINDOW_MS → merged into one
+ * line.
  */
 class LogService : public QObject {
   Q_OBJECT
@@ -43,15 +43,15 @@ public:
     const QString key = component + "|" + message;
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
 
-    // ── Dedup: cùng key trong DEDUP_WINDOW_MS → đếm, không ghi ngay ──
+    // ── Dedup: same key within DEDUP_WINDOW_MS → count, don't write yet ──
     if (key == m_lastKey && (now - m_lastTime) < DEDUP_WINDOW_MS) {
       m_dedupCount++;
       return;
     }
 
-    // Flush dedup nếu có
+    // Flush dedup if any
     if (m_dedupCount > 1) {
-      const QString summary = QString("  └─ (lặp lại ×%1 lần trong ~%2s)")
+      const QString summary = QString("  └─ (repeated ×%1 times in ~%2s)")
                                   .arg(m_dedupCount)
                                   .arg((now - m_lastTime) / 1000.0, 0, 'f', 1);
       if (m_file.isOpen()) {
@@ -78,7 +78,7 @@ public:
     // Emit cho UI
     emit logged(level, component, message, ts);
 
-    // Emit hasError nếu là lỗi
+    // Emit hasError if error level
     if (level == Level::Error || level == Level::Warn)
       emit errorLogged();
   }
@@ -95,16 +95,15 @@ public:
     return QString::fromUtf8(f.readAll());
   }
 
-  /** Xóa toàn bộ nội dung file log trên disk và reset dedup state. */
+  /** Clear all log file content on disk and reset dedup state. */
   void clearLog() {
     QMutexLocker lock(&m_mutex);
 
-    // Đóng file, truncate bằng resize(0), mở lại
+    // Close file, truncate via resize(0), reopen
     m_file.close();
-    m_file.resize(
-        0); // truncate không cần open — không trigger nodiscard warning
+    m_file.resize(0); // truncate without open — avoids nodiscard warning
 
-    // Mở lại ở chế độ Append để tiếp tục ghi
+    // Reopen in Append mode to continue writing
     if (m_file.open(QIODevice::Append | QIODevice::Text)) {
       m_stream.setDevice(&m_file);
       m_stream.setEncoding(QStringConverter::Utf8);
@@ -129,11 +128,11 @@ public:
 signals:
   void logged(LogService::Level level, const QString &component,
               const QString &message, const QString &timestamp);
-  void errorLogged(); // emit khi có warn/error → UI hiện chấm đỏ
-  void logCleared();  // emit khi file log bị xóa
+  void errorLogged(); // emitted on warn/error → UI shows red dot
+  void logCleared();  // emitted when log file is cleared
 
 private:
-  static constexpr qint64 DEDUP_WINDOW_MS = 5000; // 5 giây
+  static constexpr qint64 DEDUP_WINDOW_MS = 5000; // 5 seconds
 
   LogService() {
     m_file.setFileName(logFilePath());

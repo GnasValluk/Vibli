@@ -1,86 +1,79 @@
 #include "VideoThumbnail.h"
 
 #include <QGraphicsScene>
-#include <QResizeEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QResizeEvent>
 
 VideoThumbnail::VideoThumbnail(QWidget *parent)
-    : QGraphicsView(parent)
-    , m_scene(new QGraphicsScene(this))
-    , m_videoItem(new QGraphicsVideoItem)
-{
-    setScene(m_scene);
-    m_scene->addItem(m_videoItem);
+    : QGraphicsView(parent), m_scene(new QGraphicsScene(this)),
+      m_videoItem(new QGraphicsVideoItem) {
+  setScene(m_scene);
+  m_scene->addItem(m_videoItem);
 
-    // Tắt scrollbar, background, border mặc định của QGraphicsView
-    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    setFrameShape(QFrame::NoFrame);
-    setStyleSheet("background: transparent; border: none;");
+  // Disable scrollbars, background, and default QGraphicsView border
+  setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+  setFrameShape(QFrame::NoFrame);
+  setStyleSheet("background: transparent; border: none;");
 
-    // Render chất lượng cao
-    setRenderHint(QPainter::Antialiasing);
-    setRenderHint(QPainter::SmoothPixmapTransform);
+  // High quality rendering
+  setRenderHint(QPainter::Antialiasing);
+  setRenderHint(QPainter::SmoothPixmapTransform);
 
-    // Clip nội dung theo viewport (crop phần thừa)
-    setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
+  // Clip content to viewport (crop excess)
+  setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
 
-    // Khi video thay đổi kích thước native → recalculate scale
-    connect(m_videoItem, &QGraphicsVideoItem::nativeSizeChanged,
-            this, &VideoThumbnail::updateVideoGeometry);
+  // Recalculate scale when native video size changes
+  connect(m_videoItem, &QGraphicsVideoItem::nativeSizeChanged, this,
+          &VideoThumbnail::updateVideoGeometry);
 }
 
-void VideoThumbnail::setMediaPlayer(QMediaPlayer *player)
-{
-    player->setVideoOutput(m_videoItem);
+void VideoThumbnail::setMediaPlayer(QMediaPlayer *player) {
+  player->setVideoOutput(m_videoItem);
 }
 
-void VideoThumbnail::resizeEvent(QResizeEvent *event)
-{
-    QGraphicsView::resizeEvent(event);
-    updateVideoGeometry();
+void VideoThumbnail::resizeEvent(QResizeEvent *event) {
+  QGraphicsView::resizeEvent(event);
+  updateVideoGeometry();
 }
 
-void VideoThumbnail::updateVideoGeometry()
-{
-    const QSizeF native = m_videoItem->nativeSize();
-    const QSize  view   = viewport()->size();
+void VideoThumbnail::updateVideoGeometry() {
+  const QSizeF native = m_videoItem->nativeSize();
+  const QSize view = viewport()->size();
 
-    if (native.isEmpty() || view.isEmpty()) return;
+  if (native.isEmpty() || view.isEmpty())
+    return;
 
-    // Scale để cover: chọn scale lớn hơn giữa width và height
-    const double scaleW = view.width()  / native.width();
-    const double scaleH = view.height() / native.height();
-    const double scale  = qMax(scaleW, scaleH);   // cover, không letterbox
+  // Scale to cover: choose the larger of width and height scale factors
+  const double scaleW = view.width() / native.width();
+  const double scaleH = view.height() / native.height();
+  const double scale = qMax(scaleW, scaleH); // cover, no letterbox
 
-    const double scaledW = native.width()  * scale;
-    const double scaledH = native.height() * scale;
+  const double scaledW = native.width() * scale;
+  const double scaledH = native.height() * scale;
 
-    // Đặt kích thước video item
-    m_videoItem->setSize(QSizeF(scaledW, scaledH));
+  // Set video item size
+  m_videoItem->setSize(QSizeF(scaledW, scaledH));
 
-    // Căn giữa (crop đều 2 bên)
-    m_videoItem->setPos(
-        (view.width()  - scaledW) / 2.0,
-        (view.height() - scaledH) / 2.0
-    );
+  // Center (crop evenly on both sides)
+  m_videoItem->setPos((view.width() - scaledW) / 2.0,
+                      (view.height() - scaledH) / 2.0);
 
-    // Scene rect = viewport để không có scroll
-    setSceneRect(0, 0, view.width(), view.height());
+  // Scene rect = viewport to prevent scrolling
+  setSceneRect(0, 0, view.width(), view.height());
 }
 
-void VideoThumbnail::paintEvent(QPaintEvent *event)
-{
-    // Clip theo rounded rect trước khi vẽ video
-    QPainter clipPainter(viewport());
-    clipPainter.setRenderHint(QPainter::Antialiasing);
-    QPainterPath clip;
-    clip.addRoundedRect(viewport()->rect(), 10, 10);
+void VideoThumbnail::paintEvent(QPaintEvent *event) {
+  // Clip to rounded rect before drawing video
+  QPainter clipPainter(viewport());
+  clipPainter.setRenderHint(QPainter::Antialiasing);
+  QPainterPath clip;
+  clip.addRoundedRect(viewport()->rect(), 10, 10);
 
-    // Áp clip region
-    QRegion region(clip.toFillPolygon().toPolygon());
-    viewport()->setMask(region);
+  // Apply clip region
+  QRegion region(clip.toFillPolygon().toPolygon());
+  viewport()->setMask(region);
 
-    QGraphicsView::paintEvent(event);
+  QGraphicsView::paintEvent(event);
 }

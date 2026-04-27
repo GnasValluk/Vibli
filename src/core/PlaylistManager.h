@@ -6,11 +6,12 @@
 #include <QUrl>
 
 /**
- * @brief Track – thông tin một track (audio hoặc video) trong playlist.
+ * @brief Track – information about a single track (audio or video) in the
+ * playlist.
  *
- * QPixmap KHÔNG được lưu trong Track để tránh tốn RAM khi playlist lớn.
- * Thumbnail được quản lý riêng bởi ThumbnailCache (in-memory LRU) và
- * MediaCache (disk). Truy cập qua ThumbnailCache::get(videoId).
+ * QPixmap is NOT stored in Track to avoid high RAM usage with large playlists.
+ * Thumbnails are managed separately by ThumbnailCache (in-memory LRU) and
+ * MediaCache (disk). Access via ThumbnailCache::get(videoId).
  */
 struct Track {
   QUrl url;
@@ -19,28 +20,28 @@ struct Track {
   QString album;
   QString genre;
   qint64 durationMs = 0;
-  bool isVideo = false; // true nếu là file video
+  bool isVideo = false; // true if this is a video file
 
-  // ── Trường mới cho YouTube ────────────────────────────────────────────
-  bool isYouTube = false; // true nếu nguồn gốc từ YouTube
+  // ── YouTube fields ────────────────────────────────────────────────────
+  bool isYouTube = false; // true if sourced from YouTube
   QString videoId;        // YouTube video ID (e.g. "dQw4w9WgXcQ")
-  QString thumbnailUrl;   // URL thumbnail từ yt-dlp
-  // QPixmap thumbnail đã bị xóa — dùng ThumbnailCache::get(videoId)
-  QString uploader;     // Tên kênh / tác giả
-  QString description;  // Mô tả video (200 ký tự đầu)
-  qint64 viewCount = 0; // Lượt xem
-  qint64 likeCount = 0; // Lượt thích
-  QString uploadDate;   // Ngày đăng (YYYYMMDD)
-  QString webpageUrl;   // URL trang video đầy đủ
+  QString thumbnailUrl;   // thumbnail URL from yt-dlp
+  // QPixmap thumbnail removed — use ThumbnailCache::get(videoId)
+  QString uploader;     // channel / author name
+  QString description;  // video description (first 200 chars)
+  qint64 viewCount = 0; // view count
+  qint64 likeCount = 0; // like count
+  QString uploadDate;   // upload date (YYYYMMDD)
+  QString webpageUrl;   // full video page URL
 };
 
 /**
- * @brief PlaylistManager – quản lý danh sách phát.
+ * @brief PlaylistManager – manages the playback queue.
  *
- * Hỗ trợ:
- *  - Thêm / xóa track
- *  - Chuyển bài (next / previous)
- *  - Chế độ shuffle và repeat
+ * Supports:
+ *  - Adding / removing tracks
+ *  - Track navigation (next / previous)
+ *  - Shuffle and repeat modes
  */
 class PlaylistManager : public QObject {
   Q_OBJECT
@@ -81,7 +82,8 @@ public slots:
 signals:
   void currentTrackChanged(int index, const Track &track);
   void playlistChanged();
-  void playlistCleared(); ///< Emit ngay khi clear — để persistence save ngay
+  void playlistCleared(); ///< Emitted immediately on clear — so persistence
+                          ///< saves right away
 
 private:
   QList<Track> m_tracks;

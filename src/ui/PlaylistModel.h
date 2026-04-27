@@ -5,17 +5,17 @@
 #include <QAbstractListModel>
 
 /**
- * @brief PlaylistModel – model cho QListView hiển thị playlist.
+ * @brief PlaylistModel – model for QListView to display the playlist.
  *
- * Thay thế QListWidget để tận dụng virtual scrolling:
- * chỉ render ~10 item đang visible, không giữ QIcon cho 80 item trong RAM.
+ * Replaces QListWidget to leverage virtual scrolling:
+ * only ~10 visible items are rendered, no QIcon held for 80 items in RAM.
  *
  * Custom roles:
- *  - Qt::DisplayRole    → QString hiển thị (title + sub-line)
- *  - Qt::UserRole       → QString videoId (để delegate lấy thumbnail)
+ *  - Qt::DisplayRole    → QString display text (title + sub-line)
+ *  - Qt::UserRole       → QString videoId (for delegate to fetch thumbnail)
  *  - Qt::UserRole + 1   → bool isYouTube
  *  - Qt::UserRole + 2   → bool isVideo (local)
- *  - Qt::ToolTipRole    → tooltip HTML
+ *  - Qt::ToolTipRole    → HTML tooltip
  */
 class PlaylistModel : public QAbstractListModel {
   Q_OBJECT
@@ -29,7 +29,7 @@ public:
   QVariant data(const QModelIndex &index,
                 int role = Qt::DisplayRole) const override;
 
-  /** Gọi khi thumbnail của videoId vừa sẵn sàng — invalidate row đó. */
+  /** Called when the thumbnail for videoId is ready — invalidates that row. */
   void onThumbnailReady(const QString &videoId);
 
 private slots:

@@ -53,18 +53,18 @@ QString AudioPlayer::currentSource() const {
 // ─────────────────────────────────────────────────────────────────────
 
 void AudioPlayer::play(const QUrl &url) {
-  VLOG_INFO("AudioPlayer", "Phát: " + url.fileName());
+  VLOG_INFO("AudioPlayer", "Playing: " + url.fileName());
   m_player->setSource(url);
   m_player->play();
 }
 
 void AudioPlayer::play() { m_player->play(); }
 void AudioPlayer::pause() {
-  VLOG_INFO("AudioPlayer", "Tạm dừng");
+  VLOG_INFO("AudioPlayer", "Paused");
   m_player->pause();
 }
 void AudioPlayer::stop() {
-  VLOG_INFO("AudioPlayer", "Dừng");
+  VLOG_INFO("AudioPlayer", "Stopped");
   m_player->stop();
 }
 
@@ -99,9 +99,9 @@ void AudioPlayer::onMediaStatusChanged(QMediaPlayer::MediaStatus status) {
 
 void AudioPlayer::onErrorOccurred(QMediaPlayer::Error /*error*/,
                                   const QString &errorString) {
-  VLOG_ERROR("AudioPlayer", "Lỗi phát media: " + errorString);
+  VLOG_ERROR("AudioPlayer", "Media playback error: " + errorString);
 
-  // Phân loại lỗi: recoverable (demux/network) vs fatal
+  // Classify error: recoverable (demux/network) vs fatal
   const bool isRecoverable =
       errorString.contains("Demuxing", Qt::CaseInsensitive) ||
       errorString.contains("demux", Qt::CaseInsensitive) ||
@@ -131,7 +131,7 @@ void AudioPlayer::onMetaDataChanged() {
   if (!title.isEmpty() || !artist.isEmpty())
     emit metadataChanged(title, artist, album);
 
-  // Cover art cho file local
+  // Cover art for local files
   const QString localPath = m_player->source().toLocalFile();
   if (!localPath.isEmpty()) {
     QImage img = meta.value(QMediaMetaData::ThumbnailImage).value<QImage>();

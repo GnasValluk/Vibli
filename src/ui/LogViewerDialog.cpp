@@ -21,10 +21,10 @@ LogViewerDialog::LogViewerDialog(QWidget *parent) : QDialog(parent) {
   m_logView = new QTextEdit(this);
   m_logView->setReadOnly(true);
   m_logView->setObjectName("logView");
-  m_logView->document()->setMaximumBlockCount(2000); // giới hạn 2000 dòng
+  m_logView->document()->setMaximumBlockCount(2000); // limit to 2000 lines
 
   // ── Toolbar ───────────────────────────────────────────────────────────
-  m_countLabel = new QLabel("0 lỗi", this);
+  m_countLabel = new QLabel("0 errors", this);
   m_countLabel->setObjectName("countLabel");
 
   m_copyBtn = new QPushButton("  Copy", this);
@@ -32,21 +32,21 @@ LogViewerDialog::LogViewerDialog(QWidget *parent) : QDialog(parent) {
   m_copyBtn->setIcon(
       IconFont::icon(IconFont::DESCRIPTION, 14, QColor(180, 180, 180)));
   m_copyBtn->setIconSize({14, 14});
-  m_copyBtn->setToolTip("Copy toàn bộ log vào clipboard");
+  m_copyBtn->setToolTip("Copy all log to clipboard");
 
-  m_exportBtn = new QPushButton("  Lưu file", this);
+  m_exportBtn = new QPushButton("  Save", this);
   m_exportBtn->setObjectName("toolBtn");
   m_exportBtn->setIcon(
       IconFont::icon(IconFont::DOWNLOAD, 14, QColor(180, 180, 180)));
   m_exportBtn->setIconSize({14, 14});
-  m_exportBtn->setToolTip("Lưu log ra file để gửi báo cáo");
+  m_exportBtn->setToolTip("Save log to file for bug reports");
 
-  m_clearBtn = new QPushButton("  Xóa", this);
+  m_clearBtn = new QPushButton("  Clear", this);
   m_clearBtn->setObjectName("toolBtn");
   m_clearBtn->setIcon(
       IconFont::icon(IconFont::CLEAR_ALL, 14, QColor(180, 180, 180)));
   m_clearBtn->setIconSize({14, 14});
-  m_clearBtn->setToolTip("Xóa log hiển thị (không xóa file)");
+  m_clearBtn->setToolTip("Clear displayed log (does not delete file)");
 
   auto *toolbar = new QHBoxLayout;
   toolbar->setSpacing(6);
@@ -96,7 +96,7 @@ LogViewerDialog::LogViewerDialog(QWidget *parent) : QDialog(parent) {
     )");
 
   // ── Connections ───────────────────────────────────────────────────────
-  // Lazy: chỉ nhận log realtime khi dialog đang mở
+  // Lazy: only receive realtime log when dialog is open
   connect(&LogService::instance(), &LogService::logged, this,
           &LogViewerDialog::onNewLog);
   connect(m_copyBtn, &QPushButton::clicked, this, &LogViewerDialog::onCopy);
@@ -107,7 +107,7 @@ LogViewerDialog::LogViewerDialog(QWidget *parent) : QDialog(parent) {
 }
 
 LogViewerDialog::~LogViewerDialog() {
-  // Disconnect khi đóng để không giữ QTextEdit DOM trong memory
+  // Disconnect on close to avoid keeping QTextEdit DOM in memory
   disconnect(&LogService::instance(), &LogService::logged, this,
              &LogViewerDialog::onNewLog);
 }
@@ -128,7 +128,7 @@ void LogViewerDialog::loadExistingLog() {
     if (line.isEmpty())
       continue;
 
-    // Parse level từ emoji trong dòng
+    // Parse level from emoji in the line
     LogService::Level level = LogService::Level::Info;
     if (line.contains("❌ ERROR")) {
       level = LogService::Level::Error;
@@ -139,7 +139,7 @@ void LogViewerDialog::loadExistingLog() {
       level = LogService::Level::Debug;
     }
 
-    // Hiển thị với màu tương ứng
+    // Display with corresponding color
     QString color;
     switch (level) {
     case LogService::Level::Error:
@@ -163,7 +163,7 @@ void LogViewerDialog::loadExistingLog() {
 
   updateCountLabel();
 
-  // Cuộn xuống cuối
+  // Scroll to bottom
   m_logView->verticalScrollBar()->setValue(
       m_logView->verticalScrollBar()->maximum());
 }
@@ -211,7 +211,7 @@ void LogViewerDialog::appendLine(LogService::Level level,
   m_logView->append(QString("<span style='color:%1;white-space:pre;'>%2</span>")
                         .arg(color, line.toHtmlEscaped()));
 
-  // Auto-scroll nếu đang ở cuối
+  // Auto-scroll if at the bottom
   QScrollBar *sb = m_logView->verticalScrollBar();
   if (sb->value() >= sb->maximum() - 20)
     sb->setValue(sb->maximum());
@@ -219,10 +219,10 @@ void LogViewerDialog::appendLine(LogService::Level level,
 
 void LogViewerDialog::updateCountLabel() {
   if (m_errorCount == 0)
-    m_countLabel->setText("Không có lỗi");
+    m_countLabel->setText("No errors");
   else
     m_countLabel->setText(
-        QString("<span style='color:#ff6b6b;'>%1 lỗi/cảnh báo</span>")
+        QString("<span style='color:#ff6b6b;'>%1 errors/warnings</span>")
             .arg(m_errorCount));
   m_countLabel->setTextFormat(Qt::RichText);
 }
@@ -232,12 +232,12 @@ void LogViewerDialog::updateCountLabel() {
 
 void LogViewerDialog::onCopy() {
   QApplication::clipboard()->setText(m_logView->toPlainText());
-  m_copyBtn->setText("  Đã copy!");
+  m_copyBtn->setText("  Copied!");
   QTimer::singleShot(1500, this, [this]() { m_copyBtn->setText("  Copy"); });
 }
 
 void LogViewerDialog::onClear() {
-  // Xóa file log trên disk + reset UI
+  // Clear log file on disk + reset UI
   LogService::instance().clearLog();
   m_logView->clear();
   m_errorCount = 0;
@@ -245,16 +245,15 @@ void LogViewerDialog::onClear() {
 }
 void LogViewerDialog::onExport() {
   const QString dst = QFileDialog::getSaveFileName(
-      this, "Lưu log VIBLI", QDir::homePath() + "/vibli_log.txt",
+      this, "Save VIBLI Log", QDir::homePath() + "/vibli_log.txt",
       "Text Files (*.txt);;All Files (*)");
   if (dst.isEmpty())
     return;
 
   QFile::remove(dst);
   if (QFile::copy(LogService::logFilePath(), dst))
-    m_exportBtn->setText("  Đã lưu!");
+    m_exportBtn->setText("  Saved!");
   else
-    m_exportBtn->setText("  Lỗi!");
-  QTimer::singleShot(2000, this,
-                     [this]() { m_exportBtn->setText("  Lưu file"); });
+    m_exportBtn->setText("  Error!");
+  QTimer::singleShot(2000, this, [this]() { m_exportBtn->setText("  Save"); });
 }

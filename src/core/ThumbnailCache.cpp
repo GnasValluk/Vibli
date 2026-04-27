@@ -7,7 +7,7 @@ QPixmap ThumbnailCache::get(const QString &videoId) const {
   if (!m_map.contains(videoId))
     return {};
 
-  // Cập nhật LRU: đưa lên đầu
+  // Update LRU: move to front
   m_lruOrder.removeOne(videoId);
   m_lruOrder.prepend(videoId);
 
@@ -19,14 +19,14 @@ void ThumbnailCache::put(const QString &videoId, const QPixmap &pixmap) {
     return;
 
   if (m_map.contains(videoId)) {
-    // Cập nhật ảnh + đưa lên đầu LRU
+    // Update image + move to front of LRU
     m_map.insert(videoId, pixmap);
     m_lruOrder.removeOne(videoId);
     m_lruOrder.prepend(videoId);
     return;
   }
 
-  // Evict nếu đầy
+  // Evict if full
   while (m_map.size() >= m_maxSize)
     evictLru();
 

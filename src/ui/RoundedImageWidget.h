@@ -5,10 +5,10 @@
 #include <QWidget>
 
 /**
- * @brief RoundedImageWidget – hiển thị QPixmap với bo góc thật sự.
+ * @brief RoundedImageWidget – displays a QPixmap with true rounded corners.
  *
- * Fix: cache scaled pixmap — chỉ scale lại khi size thay đổi,
- * không gọi scaled() mỗi lần paintEvent.
+ * Caches the scaled pixmap — only rescales when size changes,
+ * avoiding scaled() calls on every paintEvent.
  */
 class RoundedImageWidget : public QWidget {
   Q_OBJECT
@@ -24,7 +24,6 @@ public:
     m_scaledCache = QPixmap(); // invalidate cache
     update();
   }
-
   void setPlaceholderText(const QString &text) {
     m_placeholder = text;
     update();

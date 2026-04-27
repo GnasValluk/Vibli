@@ -76,7 +76,7 @@ void PlaylistDelegate::paint(QPainter *painter,
   painter->setPen(titleColor);
 
   if (sub.isEmpty()) {
-    // Chỉ 1 dòng — căn giữa dọc
+    // Single line — center vertically
     painter->drawText(
         textRect, Qt::AlignVCenter | Qt::AlignLeft,
         painter->fontMetrics().elidedText(title, Qt::ElideRight, textW));
@@ -115,7 +115,7 @@ void PlaylistDelegate::drawThumbnail(QPainter *p, const QRect &rect,
   p->setClipPath(clip);
 
   if (m_thumbCache && m_thumbCache->contains(videoId)) {
-    // Lấy thẳng từ ThumbnailCache — không tạo QIcon mới
+    // Retrieve directly from ThumbnailCache — no new QIcon created
     const QPixmap &px = m_thumbCache->get(videoId);
     if (!px.isNull()) {
       // Scale cover + crop center

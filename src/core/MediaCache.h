@@ -7,54 +7,54 @@
 #include <QUrl>
 
 /**
- * @brief MediaCache – cache thumbnail (disk) và stream URL (disk + TTL).
+ * @brief MediaCache – thumbnail (disk) and stream URL (disk + TTL) cache.
  *
  * Thumbnail cache:
- *  - Lưu ảnh dưới dạng file PNG tại %APPDATA%/VIBLI/thumbnails/<videoId>.png
- *  - Không có TTL (ảnh thumbnail YouTube ổn định)
+ *  - Stores images as PNG files at %APPDATA%/VIBLI/thumbnails/<videoId>.png
+ *  - No TTL (YouTube thumbnail URLs are stable)
  *
  * Stream URL cache (persistent):
- *  - Lưu tại %APPDATA%/VIBLI/stream_cache.json
- *  - Mỗi entry: { "url": "...", "cachedAt": <unix timestamp> }
- *  - TTL mặc định: 6 giờ (stream URL YouTube expire sau ~6h)
+ *  - Stored at %APPDATA%/VIBLI/stream_cache.json
+ *  - Each entry: { "url": "...", "cachedAt": <unix timestamp> }
+ *  - Default TTL: 6 hours (YouTube stream URLs expire after ~6h)
  */
 class MediaCache : public QObject {
   Q_OBJECT
 
 public:
-  static constexpr int STREAM_URL_TTL_SECONDS = 6 * 3600; // 6 giờ
+  static constexpr int STREAM_URL_TTL_SECONDS = 6 * 3600; // 6 hours
 
   explicit MediaCache(QObject *parent = nullptr);
   ~MediaCache() override = default;
 
   // ── Thumbnail ─────────────────────────────────────────────────────────
-  /** Trả về true nếu thumbnail đã được cache trên disk. */
+  /** Returns true if the thumbnail is cached on disk. */
   bool hasThumbnail(const QString &videoId) const;
 
-  /** Load thumbnail từ disk. Trả về null pixmap nếu không có. */
+  /** Loads thumbnail from disk. Returns null pixmap if not found. */
   QPixmap loadThumbnail(const QString &videoId) const;
 
-  /** Lưu thumbnail xuống disk. */
+  /** Saves thumbnail to disk. */
   void saveThumbnail(const QString &videoId, const QPixmap &pixmap);
 
-  /** Đường dẫn file thumbnail. */
+  /** Returns the thumbnail file path. */
   QString thumbnailPath(const QString &videoId) const;
 
   // ── Stream URL ────────────────────────────────────────────────────────
-  /** Trả về true nếu có stream URL hợp lệ (chưa hết TTL). */
+  /** Returns true if a valid stream URL exists (not expired). */
   bool hasStreamUrl(const QString &videoId) const;
 
-  /** Lấy stream URL từ persistent cache. Trả về QUrl() nếu không có / hết hạn.
-   */
+  /** Gets stream URL from persistent cache. Returns QUrl() if missing or
+   * expired. */
   QUrl loadStreamUrl(const QString &videoId) const;
 
-  /** Lưu stream URL vào persistent cache. */
+  /** Saves stream URL to persistent cache. */
   void saveStreamUrl(const QString &videoId, const QUrl &url);
 
-  /** Xóa stream URL khỏi persistent cache. */
+  /** Removes stream URL from persistent cache. */
   void invalidateStreamUrl(const QString &videoId);
 
-  /** Xóa toàn bộ stream URL cache (in-memory + disk). */
+  /** Clears all stream URL cache (in-memory + disk). */
   void clearAll();
 
   // ── Paths ─────────────────────────────────────────────────────────────
@@ -63,7 +63,7 @@ public:
   static QString streamCachePath(); // %APPDATA%/VIBLI/stream_cache.json
 
   // ── Maintenance ───────────────────────────────────────────────────────
-  /** Xóa tất cả stream URL đã hết hạn khỏi file cache. */
+  /** Removes all expired stream URLs from the cache file. */
   void pruneExpiredStreamUrls();
 
 private:

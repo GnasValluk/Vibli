@@ -30,18 +30,18 @@ DownloadJobWidget::DownloadJobWidget(const QString &jobId,
   m_titleLabel = new QLabel(displayLabel, this);
   m_titleLabel->setObjectName("jobTitle");
   m_titleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
-  // Elide dài → không kéo giãn layout
+  // Elide long text → prevents layout stretching
   m_titleLabel->setMinimumWidth(0);
   m_titleLabel->setMaximumWidth(9999);
 
-  // ── Action button (fixed width, không bị đẩy ra ngoài) ───────────────
-  m_actionBtn = new QPushButton("Hủy", this);
+  // ── Action button (fixed width, won't be pushed out of layout) ───────
+  m_actionBtn = new QPushButton("Cancel", this);
   m_actionBtn->setObjectName("cancelBtn");
   m_actionBtn->setFixedSize(80, 28);
   m_actionBtn->setCursor(Qt::PointingHandCursor);
 
   // ── File label ────────────────────────────────────────────────────────
-  m_fileLabel = new QLabel("Đang chờ trong hàng đợi...", this);
+  m_fileLabel = new QLabel("Waiting in queue...", this);
   m_fileLabel->setObjectName("jobFile");
   m_fileLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   m_fileLabel->setMinimumWidth(0);
@@ -66,7 +66,7 @@ DownloadJobWidget::DownloadJobWidget(const QString &jobId,
   row1->setSpacing(8);
   row1->setContentsMargins(0, 0, 0, 0);
   row1->addWidget(m_badgeLabel);
-  row1->addWidget(m_titleLabel, 1); // stretch=1 → chiếm hết không gian còn lại
+  row1->addWidget(m_titleLabel, 1); // stretch=1 → takes all remaining space
   row1->addWidget(m_actionBtn);
 
   // Row 2: file label + meta
@@ -110,7 +110,7 @@ void DownloadJobWidget::setProgress(int percent, const QString &currentFile,
     return;
   }
 
-  // Đảm bảo progress bar về dạng normal nếu trước đó là indeterminate
+  // Ensure progress bar is back to normal if it was previously indeterminate
   if (m_progressBar->maximum() == 0) {
     m_progressBar->setRange(0, 100);
     m_fileLabel->setObjectName("jobFile");
@@ -144,14 +144,14 @@ void DownloadJobWidget::setFinished(const QString &outputDir) {
   m_progressBar->style()->unpolish(m_progressBar);
   m_progressBar->style()->polish(m_progressBar);
 
-  m_fileLabel->setText("✓  Hoàn tất");
+  m_fileLabel->setText("✓  Completed");
   m_fileLabel->setObjectName("jobFileDone");
   m_fileLabel->style()->unpolish(m_fileLabel);
   m_fileLabel->style()->polish(m_fileLabel);
 
   m_metaLabel->clear();
 
-  m_actionBtn->setText("Mở thư mục");
+  m_actionBtn->setText("Open Folder");
   m_actionBtn->setObjectName("openBtn");
   m_actionBtn->style()->unpolish(m_actionBtn);
   m_actionBtn->style()->polish(m_actionBtn);
@@ -163,14 +163,14 @@ void DownloadJobWidget::setCancelled() {
   m_progressBar->style()->unpolish(m_progressBar);
   m_progressBar->style()->polish(m_progressBar);
 
-  m_fileLabel->setText("⊘  Đã hủy");
+  m_fileLabel->setText("⊘  Cancelled");
   m_fileLabel->setObjectName("jobFileCancelled");
   m_fileLabel->style()->unpolish(m_fileLabel);
   m_fileLabel->style()->polish(m_fileLabel);
 
   m_metaLabel->clear();
   m_actionBtn->setEnabled(false);
-  m_actionBtn->setText("Đã hủy");
+  m_actionBtn->setText("Cancelled");
   m_actionBtn->setObjectName("doneBtn");
   m_actionBtn->style()->unpolish(m_actionBtn);
   m_actionBtn->style()->polish(m_actionBtn);
@@ -191,7 +191,7 @@ void DownloadJobWidget::setFailed(const QString &message) {
 
   m_metaLabel->clear();
   m_actionBtn->setEnabled(false);
-  m_actionBtn->setText("Lỗi");
+  m_actionBtn->setText("Error");
   m_actionBtn->setObjectName("doneBtn");
   m_actionBtn->style()->unpolish(m_actionBtn);
   m_actionBtn->style()->polish(m_actionBtn);
@@ -199,7 +199,7 @@ void DownloadJobWidget::setFailed(const QString &message) {
 
 void DownloadJobWidget::setQueued() {
   m_state = JobState::Queued;
-  m_fileLabel->setText("Đang chờ trong hàng đợi...");
+  m_fileLabel->setText("Waiting in queue...");
   m_metaLabel->clear();
 }
 
@@ -214,7 +214,7 @@ DownloadManagerDialog::DownloadManagerDialog(YtDlpService *service,
   setMinimumWidth(460);
   setMinimumHeight(120);
   setMaximumHeight(600);
-  resize(540, 120); // bắt đầu nhỏ, tự mở rộng khi thêm job
+  resize(540, 120); // start small, auto-expand as jobs are added
   setWindowFlags(windowFlags() | Qt::Window);
 
   // ── Header bar ────────────────────────────────────────────────────────
@@ -222,7 +222,7 @@ DownloadManagerDialog::DownloadManagerDialog(YtDlpService *service,
   headerWidget->setObjectName("headerBar");
   headerWidget->setFixedHeight(40);
 
-  m_headerLabel = new QLabel("Chưa có download nào", headerWidget);
+  m_headerLabel = new QLabel("No downloads yet", headerWidget);
   m_headerLabel->setObjectName("headerLabel");
 
   auto *headerLayout = new QHBoxLayout(headerWidget);
@@ -246,7 +246,7 @@ DownloadManagerDialog::DownloadManagerDialog(YtDlpService *service,
   m_listLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
 
   m_emptyLabel =
-      new QLabel("Chưa có download nào.\nNhấn Download MP3 / MP4 để bắt đầu.",
+      new QLabel("No downloads yet.\nClick Download MP3 / MP4 to get started.",
                  m_listContainer);
   m_emptyLabel->setObjectName("emptyLabel");
   m_emptyLabel->setAlignment(Qt::AlignCenter);
@@ -456,7 +456,7 @@ void DownloadManagerDialog::addJob(const DownloadJob &job,
 
   updateHeader();
 
-  // Tự điều chỉnh chiều cao theo số job (tối đa 600px)
+  // Auto-adjust height based on job count (max 600px)
   adjustSize();
 
   m_service->downloadMedia(job);
@@ -467,17 +467,17 @@ void DownloadManagerDialog::addJob(const DownloadJob &job,
 
 void DownloadManagerDialog::updateHeader() {
   if (m_totalJobs == 0) {
-    m_headerLabel->setText("Chưa có download nào");
+    m_headerLabel->setText("No downloads yet");
     return;
   }
   QStringList parts;
   if (m_activeJobs > 0)
-    parts << QString("%1 đang tải").arg(m_activeJobs);
+    parts << QString("%1 downloading").arg(m_activeJobs);
   if (m_finishedJobs > 0)
-    parts << QString("%1 hoàn tất").arg(m_finishedJobs);
+    parts << QString("%1 completed").arg(m_finishedJobs);
   const int other = m_totalJobs - m_activeJobs - m_finishedJobs;
   if (other > 0)
-    parts << QString("%1 khác").arg(other);
+    parts << QString("%1 other").arg(other);
   m_headerLabel->setText(parts.join("  •  "));
 }
 
@@ -492,7 +492,7 @@ void DownloadManagerDialog::onDownloadProgress(const QString &jobId,
     return;
 
   // Payload format: "filename\x1Fspeed\x1Feta\x1FphaseText"
-  // percent == -1 → đang ở giai đoạn hậu kỳ (convert/embed)
+  // percent == -1 → currently in post-processing phase (convert/embed)
   const QStringList parts = payload.split('\x1F');
   const QString fileName = parts.value(0);
   const QString speed = parts.value(1);

@@ -9,10 +9,12 @@
 #include <QJsonValue>
 #include <QRegularExpression>
 
-static constexpr int STREAM_TIMEOUT_MS = 35000; // 35s — đủ cho mạng chậm
+static constexpr int STREAM_TIMEOUT_MS =
+    35000; // 35s — enough for slow networks
 
-// Format priority: m4a tốt nhất trên Windows/FFmpeg, webm fallback, best cuối
-// Dùng selector yt-dlp: https://github.com/yt-dlp/yt-dlp#format-selection
+// Format priority: m4a is best on Windows/FFmpeg, webm as fallback, best as
+// last resort Uses yt-dlp selector:
+// https://github.com/yt-dlp/yt-dlp#format-selection
 const QStringList YtDlpService::FORMAT_PRIORITY = {
     "bestaudio[ext=m4a]/bestaudio[acodec=mp4a]/bestaudio[acodec=aac]",
     "bestaudio[ext=webm]/bestaudio[acodec=opus]", "bestaudio/best"};
@@ -63,9 +65,9 @@ void YtDlpService::setMediaCache(MediaCache *cache) { m_mediaCache = cache; }
 
 void YtDlpService::fetchPlaylistMetadata(const QString &playlistUrl) {
   if (!isAvailable()) {
-    VLOG_ERROR("YtDlpService", "Không tìm thấy yt-dlp.exe tại: " + ytDlpPath());
+    VLOG_ERROR("YtDlpService", "yt-dlp.exe not found at: " + ytDlpPath());
     emit errorOccurred(
-        "Khong tim thay yt-dlp.exe. Vui long kiem tra thu muc yt_dlp/");
+        "yt-dlp.exe not found. Please check the yt_dlp/ directory.");
     return;
   }
   if (m_metadataProcess->state() != QProcess::NotRunning) {
@@ -74,8 +76,8 @@ void YtDlpService::fetchPlaylistMetadata(const QString &playlistUrl) {
   }
   m_metadataBuffer.clear();
   m_fetchedCount = 0;
-  VLOG_INFO("YtDlpService", "Bắt đầu fetch playlist: " + playlistUrl);
-  emit progressUpdated("Đang tải playlist...");
+  VLOG_INFO("YtDlpService", "Starting playlist fetch: " + playlistUrl);
+  emit progressUpdated("Loading playlist...");
   emit fetchProgress(0, -1);
 
   QStringList args;
@@ -90,7 +92,7 @@ void YtDlpService::resolveStreamUrl(const QString &videoId) {
   if (videoId.isEmpty())
     return;
 
-  // Cache hit: trả về ngay
+  // Cache hit: return immediately
   if (m_streamCache.contains(videoId)) {
     VLOG_DEBUG("YtDlpService", "Memory cache hit: " + videoId);
     emit streamUrlReady(videoId, m_streamCache.value(videoId));
@@ -106,12 +108,12 @@ void YtDlpService::resolveStreamUrl(const QString &videoId) {
     }
   }
 
-  // Nếu đang xử lý đúng videoId này rồi → bỏ qua
+  // Already processing this videoId → skip
   if (m_streamBusy && m_pendingVideoId == videoId && !m_pendingIsPrefetch)
     return;
 
-  // Đưa lên đầu queue (ưu tiên cao — user đang chờ)
-  // Xóa entry cũ nếu đã có trong queue
+  // Push to front of queue (high priority — user is waiting)
+  // Remove existing entry if already queued
   for (int i = 0; i < m_streamQueue.size(); ++i) {
     if (m_streamQueue[i].videoId == videoId) {
       m_streamQueue.removeAt(i);
@@ -126,13 +128,13 @@ void YtDlpService::prefetchStreamUrl(const QString &videoId) {
   if (videoId.isEmpty())
     return;
 
-  // Đã có cache → không cần prefetch
+  // Already cached → no need to prefetch
   if (m_streamCache.contains(videoId))
     return;
   if (m_mediaCache && m_mediaCache->hasStreamUrl(videoId))
     return;
 
-  // Đã có trong queue → không thêm nữa
+  // Already in queue → don't add again
   for (const auto &req : m_streamQueue) {
     if (req.videoId == videoId)
       return;
@@ -156,13 +158,12 @@ void YtDlpService::invalidateStreamCache(const QString &videoId) {
 
 void YtDlpService::downloadMedia(const DownloadJob &job) {
   if (job.url.isEmpty() || job.jobId.isEmpty() || job.outputDir.isEmpty()) {
-    VLOG_ERROR("YtDlpService", "downloadMedia: job thiếu thông tin bắt buộc");
-    emit downloadError(job.jobId,
-                       "Job không hợp lệ (url/jobId/outputDir rỗng)");
+    VLOG_ERROR("YtDlpService", "downloadMedia: job is missing required fields");
+    emit downloadError(job.jobId, "Invalid job (url/jobId/outputDir is empty)");
     return;
   }
   if (!isAvailable()) {
-    emit downloadError(job.jobId, "Không tìm thấy yt-dlp.exe");
+    emit downloadError(job.jobId, "yt-dlp.exe not found");
     return;
   }
   m_downloadQueue.enqueue(job);
@@ -170,7 +171,7 @@ void YtDlpService::downloadMedia(const DownloadJob &job) {
 }
 
 void YtDlpService::cancelDownload(const QString &jobId) {
-  // Xóa khỏi queue nếu chưa chạy
+  // Remove from queue if not yet running
   for (int i = 0; i < m_downloadQueue.size(); ++i) {
     if (m_downloadQueue[i].jobId == jobId) {
       m_downloadQueue.removeAt(i);
@@ -178,12 +179,12 @@ void YtDlpService::cancelDownload(const QString &jobId) {
       return;
     }
   }
-  // Kill nếu đang chạy — đặt flag trước khi kill
+  // Kill if currently running — set flag before killing
   if (m_downloadBusy && m_activeDownload.jobId == jobId) {
     m_downloadCancelled = true;
     if (m_downloadProcess->state() != QProcess::NotRunning)
       m_downloadProcess->kill();
-    // onDownloadProcessFinished sẽ emit downloadCancelled
+    // onDownloadProcessFinished will emit downloadCancelled
   }
 }
 
@@ -194,18 +195,18 @@ void YtDlpService::processNextInQueue() {
   if (m_streamBusy || m_streamQueue.isEmpty())
     return;
   if (!isAvailable()) {
-    // Drain queue với lỗi
+    // Drain queue with error
     while (!m_streamQueue.isEmpty()) {
       const auto req = m_streamQueue.dequeue();
       if (!req.isPrefetch)
-        emit streamErrorOccurred(req.videoId, "Không tìm thấy yt-dlp.exe");
+        emit streamErrorOccurred(req.videoId, "yt-dlp.exe not found");
     }
     return;
   }
 
   const StreamRequest req = m_streamQueue.dequeue();
   m_pendingVideoId = req.videoId;
-  m_pendingFormatIdx = 0; // bắt đầu từ format ưu tiên nhất
+  m_pendingFormatIdx = 0; // start with highest priority format
   m_pendingIsPrefetch = req.isPrefetch;
   m_streamBusy = true;
 
@@ -220,7 +221,7 @@ void YtDlpService::startStreamProcess(const QString &videoId,
   }
 
   VLOG_INFO("YtDlpService",
-            QString("Resolve stream [%1] format=%2").arg(videoId, format));
+            QString("Resolving stream [%1] format=%2").arg(videoId, format));
 
   const QString videoUrl = "https://www.youtube.com/watch?v=" + videoId;
   QStringList args;
@@ -254,20 +255,20 @@ void YtDlpService::startDownloadProcess(const DownloadJob &job) {
 
   QStringList args;
   args << "--ffmpeg-location" << ffmpegDir() << "--no-warnings"
-       << "--newline"         // progress từng dòng
-       << "--no-part"         // không tạo file .part
-       << "--embed-thumbnail" // nhúng thumbnail vào file
-       << "--embed-metadata"  // nhúng title, artist, date...
-       << "--add-metadata"    // thêm metadata bổ sung
+       << "--newline"         // per-line progress
+       << "--no-part"         // no .part files
+       << "--embed-thumbnail" // embed thumbnail into file
+       << "--embed-metadata"  // embed title, artist, date...
+       << "--add-metadata"    // add extra metadata
        << "-o" << (job.outputDir + "/%(title)s.%(ext)s");
 
   if (job.format == DownloadFormat::Mp3) {
     args << "-x"
          << "--audio-format" << "mp3"
          << "--audio-quality" << "0"         // VBR best quality
-         << "--convert-thumbnails" << "jpg"; // thumbnail phải là jpg cho ID3
+         << "--convert-thumbnails" << "jpg"; // thumbnail must be jpg for ID3
   } else {
-    // MP4: video + audio, merge thành mp4
+    // MP4: video + audio, merge into mp4
     args << "-f"
          << "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
          << "--merge-output-format" << "mp4";
@@ -330,20 +331,20 @@ void YtDlpService::onMetadataProcessFinished(int exitCode,
       emit fetchProgress(m_fetchedCount, m_fetchedCount);
       emit playlistMetadataReady({});
     } else {
-      emit errorOccurred("yt-dlp lỗi (exit " + QString::number(exitCode) +
+      emit errorOccurred("yt-dlp error (exit " + QString::number(exitCode) +
                          "): " + errOutput);
     }
     return;
   }
 
   if (m_fetchedCount == 0) {
-    emit errorOccurred("Playlist không có video nào hoặc không thể truy cập.");
+    emit errorOccurred("Playlist has no videos or is not accessible.");
     return;
   }
 
   emit fetchProgress(m_fetchedCount, m_fetchedCount);
   VLOG_INFO("YtDlpService",
-            QString("Fetch xong playlist: %1 track").arg(m_fetchedCount));
+            QString("Playlist fetch complete: %1 tracks").arg(m_fetchedCount));
   emit playlistMetadataReady({});
 }
 
@@ -354,46 +355,47 @@ void YtDlpService::onStreamProcessFinished(int exitCode,
   if (exitCode != 0) {
     const QString errOutput =
         QString::fromUtf8(m_streamProcess->readAllStandardError()).trimmed();
-    VLOG_WARN("YtDlpService", QString("Stream lỗi [%1] format_idx=%2: %3")
+    VLOG_WARN("YtDlpService", QString("Stream error [%1] format_idx=%2: %3")
                                   .arg(m_pendingVideoId)
                                   .arg(m_pendingFormatIdx)
                                   .arg(errOutput));
 
-    // Thử format tiếp theo nếu còn
+    // Try next format if available
     const int nextIdx = m_pendingFormatIdx + 1;
     if (nextIdx < FORMAT_PRIORITY.size()) {
       m_pendingFormatIdx = nextIdx;
       VLOG_INFO("YtDlpService",
-                QString("Thử format fallback [%1]: %2")
+                QString("Trying format fallback [%1]: %2")
                     .arg(m_pendingVideoId, FORMAT_PRIORITY[nextIdx]));
       startStreamProcess(m_pendingVideoId, FORMAT_PRIORITY[nextIdx]);
-      return; // không giải phóng m_streamBusy — vẫn đang xử lý
+      return; // don't release m_streamBusy — still processing
     }
 
-    // Hết format fallback → báo lỗi
-    VLOG_ERROR("YtDlpService", "Hết format fallback cho: " + m_pendingVideoId);
+    // All formats exhausted → report error
+    VLOG_ERROR("YtDlpService",
+               "All format fallbacks exhausted for: " + m_pendingVideoId);
     m_streamBusy = false;
     if (!m_pendingIsPrefetch)
       emit streamErrorOccurred(m_pendingVideoId,
-                               "Không lấy được stream URL sau " +
+                               "Failed to get stream URL after " +
                                    QString::number(FORMAT_PRIORITY.size()) +
-                                   " format: " + errOutput);
+                                   " formats: " + errOutput);
     processNextInQueue();
     return;
   }
 
-  // Đọc tất cả URL từ output (yt-dlp có thể trả về nhiều dòng cho DASH)
+  // Read all URLs from output (yt-dlp may return multiple lines for DASH)
   const QString rawOutput =
       QString::fromUtf8(m_streamProcess->readAllStandardOutput()).trimmed();
 
-  // Lấy dòng đầu tiên là audio URL (khi có video+audio, dòng 2 là video)
+  // Take the first line as the audio URL (when video+audio, line 2 is video)
   const QString urlStr = rawOutput.split('\n').first().trimmed();
 
   if (urlStr.isEmpty()) {
-    VLOG_ERROR("YtDlpService", "Stream URL rỗng cho: " + m_pendingVideoId);
+    VLOG_ERROR("YtDlpService", "Empty stream URL for: " + m_pendingVideoId);
     m_streamBusy = false;
     if (!m_pendingIsPrefetch)
-      emit streamErrorOccurred(m_pendingVideoId, "yt-dlp trả về URL rỗng");
+      emit streamErrorOccurred(m_pendingVideoId, "yt-dlp returned empty URL");
     processNextInQueue();
     return;
   }
@@ -410,7 +412,7 @@ void YtDlpService::onStreamProcessFinished(int exitCode,
   const QString resolvedId = m_pendingVideoId;
   m_streamBusy = false;
 
-  // Emit chỉ khi không phải prefetch silent, hoặc luôn emit để coordinator biết
+  // Always emit so the coordinator knows the URL is ready
   emit streamUrlReady(resolvedId, streamUrl);
 
   processNextInQueue();
@@ -424,12 +426,12 @@ void YtDlpService::onStreamProcessTimeout() {
                                 .arg(m_pendingVideoId)
                                 .arg(m_pendingFormatIdx));
 
-  // Timeout cũng thử format tiếp theo
+  // Timeout also tries the next format
   const int nextIdx = m_pendingFormatIdx + 1;
   if (nextIdx < FORMAT_PRIORITY.size()) {
     m_pendingFormatIdx = nextIdx;
     VLOG_INFO("YtDlpService",
-              QString("Timeout → thử format fallback [%1]: %2")
+              QString("Timeout → trying format fallback [%1]: %2")
                   .arg(m_pendingVideoId, FORMAT_PRIORITY[nextIdx]));
     startStreamProcess(m_pendingVideoId, FORMAT_PRIORITY[nextIdx]);
     return;
@@ -438,7 +440,7 @@ void YtDlpService::onStreamProcessTimeout() {
   m_streamBusy = false;
   if (!m_pendingIsPrefetch)
     emit streamErrorOccurred(m_pendingVideoId,
-                             "Timeout khi lấy stream URL (tất cả format)");
+                             "Timeout while getting stream URL (all formats)");
   processNextInQueue();
 }
 
@@ -446,7 +448,7 @@ void YtDlpService::onStreamProcessTimeout() {
 // ────────────────────────────────────────────────────────────
 
 void YtDlpService::onDownloadReadyRead() {
-  // Đọc cả stdout và stderr
+  // Read both stdout and stderr
   const QString out =
       QString::fromUtf8(m_downloadProcess->readAllStandardOutput());
   const QString err =
@@ -487,18 +489,18 @@ void YtDlpService::onDownloadReadyRead() {
       const QString phase = mPhase.captured(1).toLower();
       QString statusText;
       if (phase == "extractaudio")
-        statusText = "Đang chuyển đổi sang MP3...";
+        statusText = "Converting to MP3...";
       else if (phase == "ffmpeg")
-        statusText = "Đang xử lý với ffmpeg...";
+        statusText = "Processing with ffmpeg...";
       else if (phase == "embedthumbnail")
-        statusText = "Đang nhúng thumbnail...";
+        statusText = "Embedding thumbnail...";
       else if (phase == "metadata")
-        statusText = "Đang ghi metadata...";
+        statusText = "Writing metadata...";
       else if (phase == "movefiles")
-        statusText = "Đang di chuyển file...";
+        statusText = "Moving files...";
 
       if (!statusText.isEmpty()) {
-        // Dùng percent = -1 làm tín hiệu "đang hậu kỳ, không có %"
+        // Use percent = -1 as signal for "post-processing, no percentage"
         const QString payload =
             m_currentDownloadFile + "\x1F\x1F\x1F" + statusText;
         emit downloadProgress(m_activeDownload.jobId, -1, payload);
@@ -539,7 +541,7 @@ void YtDlpService::onDownloadProcessFinished(int exitCode,
   m_downloadCancelled = false;
 
   if (wasCancelled) {
-    VLOG_INFO("YtDlpService", "Download bị hủy bởi user [" + jobId + "]");
+    VLOG_INFO("YtDlpService", "Download cancelled by user [" + jobId + "]");
     emit downloadCancelled(jobId);
     processNextDownload();
     return;
@@ -548,14 +550,14 @@ void YtDlpService::onDownloadProcessFinished(int exitCode,
   if (exitCode != 0) {
     const QString errOut =
         QString::fromUtf8(m_downloadProcess->readAllStandardError()).trimmed();
-    VLOG_ERROR("YtDlpService", QString("Download lỗi [%1] exit=%2: %3")
+    VLOG_ERROR("YtDlpService", QString("Download error [%1] exit=%2: %3")
                                    .arg(jobId)
                                    .arg(exitCode)
                                    .arg(errOut));
-    emit downloadError(jobId, "yt-dlp lỗi (exit " + QString::number(exitCode) +
-                                  "): " + errOut);
+    emit downloadError(jobId, "yt-dlp error (exit " +
+                                  QString::number(exitCode) + "): " + errOut);
   } else {
-    VLOG_INFO("YtDlpService", "Download hoàn tất [" + jobId + "]");
+    VLOG_INFO("YtDlpService", "Download complete [" + jobId + "]");
     emit downloadProgress(jobId, 100, m_currentDownloadFile);
     emit downloadFinished(jobId, outDir);
   }

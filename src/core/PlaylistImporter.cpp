@@ -30,19 +30,19 @@ bool PlaylistImporter::isValidPlaylistUrl(const QString &url) {
 
 QString PlaylistImporter::validationErrorMessage(const QString &url) {
   if (url.isEmpty())
-    return "URL không được để trống.";
+    return "URL must not be empty.";
   if (!url.startsWith("https://"))
-    return "URL phải bắt đầu bằng https://.";
+    return "URL must start with https://.";
   if (!url.contains("youtube.com"))
-    return "URL phải là địa chỉ YouTube.";
+    return "URL must be a YouTube address.";
   if (!url.contains("/playlist"))
-    return "URL phải trỏ đến một playlist YouTube.";
+    return "URL must point to a YouTube playlist.";
   if (!url.contains("list="))
-    return "URL phải chứa tham số list=.";
+    return "URL must contain the list= parameter.";
   const int idx = url.indexOf("list=");
   if (url.mid(idx + 5).split('&').first().isEmpty())
-    return "ID playlist (list=) không được để trống.";
-  return "URL không hợp lệ. Định dạng: "
+    return "Playlist ID (list=) must not be empty.";
+  return "Invalid URL. Expected format: "
          "https://www.youtube.com/playlist?list=<ID>";
 }
 
@@ -63,7 +63,7 @@ void PlaylistImporter::importPlaylist(const QString &url) {
 // ─────────────────────────────────────────────────────────────
 
 void PlaylistImporter::onTrackFetched(const Track &track) {
-  // Thêm ngay vào playlist — UI sẽ thấy track xuất hiện dần
+  // Add immediately to playlist — UI will see tracks appear progressively
   m_playlist->addTrack(track);
   m_importedCount++;
   emit trackImported(m_importedCount);
@@ -71,12 +71,12 @@ void PlaylistImporter::onTrackFetched(const Track &track) {
   if (track.thumbnailUrl.isEmpty())
     return;
 
-  // Cache hit: load từ disk vào ThumbnailCache, không cần network
+  // Cache hit: load from disk into ThumbnailCache, no network needed
   if (m_cache && m_cache->hasThumbnail(track.videoId)) {
     const QPixmap cached = m_cache->loadThumbnail(track.videoId);
     if (!cached.isNull()) {
-      // Scale xuống 1 lần duy nhất khi đưa vào cache — 64×64 đủ cho list (56px)
-      // và MiniPlayer (70px)
+      // Scale once when inserting into cache — 64×64 is enough for list (56px)
+      // and MiniPlayer (70px)
       const QPixmap scaled = cached.scaled(
           64, 64, Qt::KeepAspectRatioByExpanding, Qt::SmoothTransformation);
       if (m_thumbCache)
@@ -114,11 +114,11 @@ void PlaylistImporter::downloadThumbnail(const QString &videoId,
     if (!px.loadFromData(reply->readAll()))
       return;
 
-    // Lưu ảnh gốc xuống disk (để restore sau)
+    // Save original image to disk (for later restore)
     if (m_cache)
       m_cache->saveThumbnail(videoId, px);
 
-    // Scale 1 lần duy nhất trước khi đưa vào LRU cache — 64×64
+    // Scale once before inserting into LRU cache — 64×64
     const QPixmap scaled = px.scaled(64, 64, Qt::KeepAspectRatioByExpanding,
                                      Qt::SmoothTransformation);
     if (m_thumbCache)

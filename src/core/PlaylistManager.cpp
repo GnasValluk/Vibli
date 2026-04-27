@@ -13,7 +13,7 @@ void PlaylistManager::addTrack(const Track &track) {
     rebuildShuffleOrder();
   emit playlistChanged();
 
-  // Tự động chọn track đầu tiên
+  // Auto-select first track
   if (m_currentIndex < 0)
     jumpTo(0);
 }

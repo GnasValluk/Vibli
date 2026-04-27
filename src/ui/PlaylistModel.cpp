@@ -42,7 +42,7 @@ QVariant PlaylistModel::data(const QModelIndex &index, int role) const {
         else
           sub += QString::number(t.viewCount) + " views";
       }
-      // Dùng \n để delegate tách 2 dòng
+      // Use \n so the delegate can split into 2 lines
       return t.title + (sub.isEmpty() ? "" : "\n" + sub);
     } else {
       return t.artist.isEmpty() ? t.title : t.artist + " – " + t.title;
@@ -50,15 +50,15 @@ QVariant PlaylistModel::data(const QModelIndex &index, int role) const {
   }
 
   case Qt::DecorationRole:
-    // Không trả QIcon ở đây — delegate tự lấy từ ThumbnailCache
-    // để tránh duplicate pixmap
+    // Don't return QIcon here — delegate fetches directly from ThumbnailCache
+    // to avoid duplicate pixmaps
     return {};
 
   case Qt::ToolTipRole:
     return t.isYouTube ? buildYouTubeTooltip(t) : QVariant{};
 
   case Qt::UserRole:
-    // YouTube → videoId; local → đường dẫn file (làm key ThumbnailCache)
+    // YouTube → videoId; local → file path (used as ThumbnailCache key)
     return t.isYouTube ? t.videoId : t.url.toLocalFile();
 
   case Qt::UserRole + 1:

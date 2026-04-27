@@ -8,7 +8,8 @@
 #include "PlaylistManager.h"
 
 /**
- * @brief PlaylistPersistence – lưu và khôi phục playlist vào file JSON cục bộ.
+ * @brief PlaylistPersistence – saves and restores the playlist to/from a local
+ * JSON file.
  *
  * Schema: { "version": 2, "tracks": [...] }
  * - Local track: { "type": "local", "url": "...", "title": "...", ... }
@@ -17,8 +18,8 @@
  *                    "viewCount": 0, "likeCount": 0, "uploadDate": "...",
  *                    "webpageUrl": "...", "thumbnailUrl": "..." }
  *
- * Không serialize: url (StreamUrl) và thumbnail (QPixmap) của YouTubeTrack.
- * Thumbnail được cache riêng bởi MediaCache.
+ * Not serialized: url (StreamUrl) and thumbnail (QPixmap) of YouTubeTrack.
+ * Thumbnails are cached separately by MediaCache.
  */
 class PlaylistPersistence : public QObject {
   Q_OBJECT

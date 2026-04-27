@@ -5,12 +5,13 @@
 #include <QStyledItemDelegate>
 
 /**
- * @brief PlaylistDelegate – vẽ từng item trong playlist.
+ * @brief PlaylistDelegate – renders each item in the playlist.
  *
- * Lấy thumbnail trực tiếp từ ThumbnailCache (không tạo QIcon mới),
- * vẽ 2 dòng text (title + sub-info), và icon placeholder cho local files.
+ * Retrieves thumbnails directly from ThumbnailCache (no new QIcon created),
+ * draws 2 lines of text (title + sub-info), and an icon placeholder for local
+ * files.
  *
- * Không giữ bất kỳ QPixmap nào — zero memory overhead ngoài ThumbnailCache.
+ * Holds no QPixmap — zero memory overhead beyond ThumbnailCache.
  */
 class PlaylistDelegate : public QStyledItemDelegate {
   Q_OBJECT
@@ -36,7 +37,7 @@ private:
 
   ThumbnailCache *m_thumbCache;
 
-  // Icon tĩnh — tạo 1 lần, dùng lại mãi (không tạo mới mỗi lần paint)
+  // Static icons — created once, reused forever (not recreated on each paint)
   mutable QIcon m_audioIcon;
   mutable QIcon m_videoIcon;
   mutable QIcon m_ytPlaceholder;

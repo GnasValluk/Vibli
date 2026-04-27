@@ -7,14 +7,15 @@
 #include <QString>
 
 /**
- * @brief ThumbnailCache – LRU in-memory cache cho thumbnail YouTube.
+ * @brief ThumbnailCache – LRU in-memory cache for YouTube thumbnails.
  *
- * Giới hạn số lượng ảnh giữ trong RAM (mặc định 30).
- * Khi vượt giới hạn, ảnh ít dùng nhất (LRU) bị evict.
- * Ảnh trên disk vẫn còn trong MediaCache — chỉ cần load lại khi cần.
+ * Limits the number of images kept in RAM (default 30).
+ * When the limit is exceeded, the least recently used (LRU) image is evicted.
+ * Images on disk remain in MediaCache — they just need to be reloaded when
+ * needed.
  *
- * Mục tiêu: 82 bài playlist chỉ giữ tối đa 30 QPixmap trong RAM (~45MB),
- * thay vì 82 QPixmap (~123MB) như trước.
+ * Goal: an 82-track playlist keeps at most 30 QPixmaps in RAM (~45MB),
+ * instead of 82 QPixmaps (~123MB) as before.
  */
 class ThumbnailCache : public QObject {
   Q_OBJECT
@@ -26,16 +27,16 @@ public:
                           QObject *parent = nullptr);
   ~ThumbnailCache() override = default;
 
-  /** Lấy thumbnail. Trả về null pixmap nếu không có trong cache. */
+  /** Gets a thumbnail. Returns null pixmap if not in cache. */
   QPixmap get(const QString &videoId) const;
 
-  /** Lưu thumbnail vào cache. Evict LRU nếu vượt giới hạn. */
+  /** Stores a thumbnail. Evicts LRU entry if over the limit. */
   void put(const QString &videoId, const QPixmap &pixmap);
 
-  /** Xóa một entry. */
+  /** Removes a single entry. */
   void remove(const QString &videoId);
 
-  /** Xóa toàn bộ cache. */
+  /** Clears the entire cache. */
   void clear();
 
   bool contains(const QString &videoId) const;

@@ -10,7 +10,7 @@ PlaylistImportDialog::PlaylistImportDialog(QWidget *parent) : QDialog(parent) {
   setMinimumWidth(520);
 
   // ── Widgets ───────────────────────────────────────────────────────────
-  auto *promptLabel = new QLabel("Nhập URL YouTube Playlist / Video:", this);
+  auto *promptLabel = new QLabel("Enter YouTube Playlist / Video URL:", this);
 
   m_urlEdit = new QLineEdit(this);
   m_urlEdit->setPlaceholderText("https://www.youtube.com/playlist?list=...");
@@ -20,25 +20,25 @@ PlaylistImportDialog::PlaylistImportDialog(QWidget *parent) : QDialog(parent) {
   m_errorLabel->setWordWrap(true);
   m_errorLabel->hide();
 
-  // Nút Import (OK)
+  // Import button (OK)
   m_okBtn = new QPushButton("Import Playlist", this);
   m_okBtn->setEnabled(false);
   m_okBtn->setDefault(true);
-  m_okBtn->setToolTip("Thêm playlist vào thư viện");
+  m_okBtn->setToolTip("Add playlist to library");
 
-  // Nút Download MP3
+  // Download MP3 button
   m_mp3Btn = new QPushButton("Download MP3", this);
   m_mp3Btn->setEnabled(false);
   m_mp3Btn->setObjectName("mp3Btn");
-  m_mp3Btn->setToolTip("Tải xuống toàn bộ playlist dưới dạng MP3");
+  m_mp3Btn->setToolTip("Download entire playlist as MP3");
 
-  // Nút Download MP4
+  // Download MP4 button
   m_mp4Btn = new QPushButton("Download MP4", this);
   m_mp4Btn->setEnabled(false);
   m_mp4Btn->setObjectName("mp4Btn");
-  m_mp4Btn->setToolTip("Tải xuống toàn bộ playlist dưới dạng MP4");
+  m_mp4Btn->setToolTip("Download entire playlist as MP4");
 
-  auto *cancelBtn = new QPushButton("Hủy", this);
+  auto *cancelBtn = new QPushButton("Cancel", this);
 
   // ── Layout ────────────────────────────────────────────────────────────
   auto *btnLayout = new QHBoxLayout;

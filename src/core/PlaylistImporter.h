@@ -10,11 +10,11 @@
 #include "YtDlpService.h"
 
 /**
- * @brief PlaylistImporter – điều phối luồng import YouTube playlist.
+ * @brief PlaylistImporter – orchestrates the YouTube playlist import flow.
  *
- * Streaming mode: mỗi track được thêm vào playlist ngay khi parse xong,
- * thumbnail tải async song song. Thumbnail được cache trên disk (MediaCache)
- * và in-memory LRU (ThumbnailCache).
+ * Streaming mode: each track is added to the playlist as soon as it is parsed,
+ * thumbnails are downloaded asynchronously in parallel. Thumbnails are cached
+ * on disk (MediaCache) and in-memory LRU (ThumbnailCache).
  */
 class PlaylistImporter : public QObject {
   Q_OBJECT
@@ -29,10 +29,10 @@ public:
   void importPlaylist(const QString &url);
 
   /**
-   * @brief Khôi phục thumbnail từ disk cache cho các track đã load.
+   * @brief Restores thumbnails from disk cache for already-loaded tracks.
    *
-   * Gọi sau khi playlist được restore từ PlaylistPersistence để
-   * điền lại ThumbnailCache mà không cần download lại.
+   * Called after playlist is restored from PlaylistPersistence to
+   * repopulate ThumbnailCache without re-downloading.
    */
   void restoreCachedThumbnails(const QList<Track> &tracks);
 
@@ -43,9 +43,9 @@ signals:
   void importStarted();
   void importFinished(int trackCount);
   void importFailed(const QString &reason);
-  /** Thumbnail đã sẵn sàng trong ThumbnailCache — UI dùng videoId để lấy. */
+  /** Thumbnail is ready in ThumbnailCache — UI uses videoId to retrieve it. */
   void thumbnailReady(const QString &videoId);
-  // Tiến trình streaming: bao nhiêu track đã load
+  // Streaming progress: how many tracks have been loaded
   void trackImported(int loaded);
 
 private slots:

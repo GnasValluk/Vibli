@@ -48,7 +48,7 @@ QPixmap MediaCache::loadThumbnail(const QString &videoId) const {
     return {};
   QPixmap px;
   if (!px.load(path)) {
-    VLOG_WARN("MediaCache", "Không load được thumbnail: " + path);
+    VLOG_WARN("MediaCache", "Failed to load thumbnail: " + path);
     return {};
   }
   return px;
@@ -60,9 +60,9 @@ void MediaCache::saveThumbnail(const QString &videoId, const QPixmap &pixmap) {
   ensureDirs();
   const QString path = thumbnailPath(videoId);
   if (!pixmap.save(path, "PNG")) {
-    VLOG_WARN("MediaCache", "Không lưu được thumbnail: " + path);
+    VLOG_WARN("MediaCache", "Failed to save thumbnail: " + path);
   } else {
-    VLOG_DEBUG("MediaCache", "Đã lưu thumbnail: " + videoId);
+    VLOG_DEBUG("MediaCache", "Thumbnail saved: " + videoId);
   }
 }
 
@@ -91,20 +91,20 @@ void MediaCache::saveStreamUrl(const QString &videoId, const QUrl &url) {
   entry.cachedAt = QDateTime::currentSecsSinceEpoch();
   m_streamEntries.insert(videoId, entry);
   saveStreamCacheFile();
-  VLOG_DEBUG("MediaCache", "Đã lưu stream URL: " + videoId);
+  VLOG_DEBUG("MediaCache", "Stream URL saved: " + videoId);
 }
 
 void MediaCache::invalidateStreamUrl(const QString &videoId) {
   if (m_streamEntries.remove(videoId) > 0) {
     saveStreamCacheFile();
-    VLOG_DEBUG("MediaCache", "Đã xóa stream URL cache: " + videoId);
+    VLOG_DEBUG("MediaCache", "Stream URL cache invalidated: " + videoId);
   }
 }
 
 void MediaCache::clearAll() {
   m_streamEntries.clear();
   saveStreamCacheFile();
-  VLOG_INFO("MediaCache", "Đã xóa toàn bộ stream URL cache");
+  VLOG_INFO("MediaCache", "All stream URL cache cleared");
 }
 
 void MediaCache::pruneExpiredStreamUrls() {
@@ -121,7 +121,7 @@ void MediaCache::pruneExpiredStreamUrls() {
   if (removed > 0) {
     saveStreamCacheFile();
     VLOG_INFO("MediaCache",
-              QString("Đã xóa %1 stream URL hết hạn").arg(removed));
+              QString("Pruned %1 expired stream URLs").arg(removed));
   }
 }
 
@@ -136,14 +136,14 @@ void MediaCache::loadStreamCacheFile() {
   if (!file.exists())
     return;
   if (!file.open(QIODevice::ReadOnly)) {
-    VLOG_WARN("MediaCache", "Không mở được stream cache: " + path);
+    VLOG_WARN("MediaCache", "Failed to open stream cache: " + path);
     return;
   }
 
   QJsonParseError err;
   const QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &err);
   if (err.error != QJsonParseError::NoError || !doc.isObject()) {
-    VLOG_WARN("MediaCache", "Stream cache JSON lỗi: " + err.errorString());
+    VLOG_WARN("MediaCache", "Stream cache JSON error: " + err.errorString());
     return;
   }
 
@@ -164,7 +164,7 @@ void MediaCache::loadStreamCacheFile() {
   }
   VLOG_INFO(
       "MediaCache",
-      QString("Đã load %1 stream URL từ cache").arg(m_streamEntries.size()));
+      QString("Loaded %1 stream URLs from cache").arg(m_streamEntries.size()));
 }
 
 void MediaCache::saveStreamCacheFile() const {
@@ -181,7 +181,7 @@ void MediaCache::saveStreamCacheFile() const {
 
   QFile file(path);
   if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-    VLOG_WARN("MediaCache", "Không ghi được stream cache: " + path);
+    VLOG_WARN("MediaCache", "Failed to write stream cache: " + path);
     return;
   }
   file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));

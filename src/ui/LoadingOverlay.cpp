@@ -4,16 +4,15 @@
 #include <QPainter>
 #include <QResizeEvent>
 
-
 static constexpr int SHIMMER_INTERVAL = 16;   // ~60fps
-static constexpr qreal SHIMMER_SPEED = 0.012; // tốc độ di chuyển mỗi frame
+static constexpr qreal SHIMMER_SPEED = 0.012; // movement speed per frame
 
 LoadingOverlay::LoadingOverlay(QWidget *parent) : QWidget(parent) {
   setAttribute(Qt::WA_TransparentForMouseEvents);
   setAttribute(Qt::WA_NoSystemBackground);
   setAutoFillBackground(false);
 
-  // Chỉ chiếm phần trên cùng
+  // Only occupy the top portion
   setFixedHeight(BAR_H + 20); // bar + label
 
   // Label trạng thái nhỏ bên dưới bar
@@ -92,7 +91,7 @@ void LoadingOverlay::paintEvent(QPaintEvent *) {
 
   const QRect barRect(0, 0, width(), BAR_H);
 
-  // ── Track (nền bar) ───────────────────────────────────────────────────
+  // ── Bar track (background) ────────────────────────────────────────────
   p.fillRect(barRect, QColor(255, 255, 255, 20));
 
   if (m_total > 0) {

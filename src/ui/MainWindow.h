@@ -57,7 +57,7 @@ private:
   PlaylistImporter *m_importer;
   ThumbnailCache *m_thumbCache;
 
-  // Model/View thay thế QListWidget
+  // Model/View replace QListWidget
   PlaylistModel *m_playlistModel = nullptr;
   PlaylistDelegate *m_playlistDelegate = nullptr;
   QListView *m_playlistView = nullptr;

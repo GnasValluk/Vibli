@@ -8,13 +8,13 @@
 #include <QVideoSink>
 
 /**
- * @brief AudioPlayer – wrapper quanh QMediaPlayer của Qt6.
+ * @brief AudioPlayer – wrapper around Qt6's QMediaPlayer.
  *
- * Hỗ trợ:
+ * Supports:
  *  - Audio: mp3, flac, wav, ogg, aac, m4a, opus, ape, wv, dsf, aiff, wma…
  *  - Video: mp4, mkv, avi, mov, webm, wmv, flv, ts, m2ts…
- *  - Đọc metadata (title, artist, album, duration)
- *  - Video output qua QVideoSink
+ *  - Metadata reading (title, artist, album, duration)
+ *  - Video output via QVideoSink
  */
 class AudioPlayer : public QObject {
   Q_OBJECT
@@ -23,7 +23,7 @@ public:
   explicit AudioPlayer(QObject *parent = nullptr);
   ~AudioPlayer() override = default;
 
-  // ── Trạng thái ────────────────────────────────────────────────────────
+  // ── State ─────────────────────────────────────────────────────────────
   bool isPlaying() const;
   bool isPaused() const;
   qint64 position() const; // ms
@@ -52,12 +52,13 @@ signals:
   void durationChanged(qint64 durationMs);
   void volumeChanged(float volume);
   void errorOccurred(const QString &errorMessage);
-  /** Phát khi lỗi có thể recover được (demux fail, network hiccup). */
+  /** Emitted when a recoverable error occurs (demux fail, network hiccup). */
   void recoverableErrorOccurred(const QString &errorMessage);
   void mediaStatusChanged(QMediaPlayer::MediaStatus status);
   void metadataChanged(const QString &title, const QString &artist,
                        const QString &album);
-  /** Phát khi có cover art từ file local (embedded album art). */
+  /** Emitted when cover art is available from a local file (embedded album
+   * art). */
   void coverArtReady(const QString &localPath, const QImage &image);
   void videoAvailableChanged(bool available);
 

@@ -7,7 +7,7 @@
 TrayManager::TrayManager(QObject *parent)
     : QObject(parent), m_trayIcon(new QSystemTrayIcon(this)),
       m_menu(new QMenu) {
-  // Tray icon chỉ cần 16-32px — không load ảnh lớn vào RAM
+  // Tray icon only needs 16-32px — don't load large images into RAM
   QIcon icon;
   const QPixmap px32(":/imgs/logo_32.png");
   if (!px32.isNull())
@@ -27,8 +27,8 @@ TrayManager::TrayManager(QObject *parent)
 void TrayManager::show() { m_trayIcon->show(); }
 
 void TrayManager::buildMenu() {
-  const QColor ic(220, 220, 220);  // màu icon mặc định
-  const QColor icRed(255, 80, 80); // màu quit
+  const QColor ic(220, 220, 220);  // default icon color
+  const QColor icRed(255, 80, 80); // quit icon color
 
   // Track title (disabled)
   m_trackTitleAction = m_menu->addAction("No track playing");
