@@ -12,6 +12,7 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QMessageBox>
+#include <QRegularExpression>
 #include <QResizeEvent>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -388,8 +389,15 @@ void MainWindow::startDownload(const QString &url, DownloadFormat format) {
   job.outputDir = outputDir;
   job.jobId = QString::number(QDateTime::currentMSecsSinceEpoch());
 
-  const QString label =
-      (format == DownloadFormat::Mp3 ? "MP3" : "MP4") + QString(" – ") + url;
+  // Label ngắn gọn: chỉ lấy phần cuối URL hoặc "YouTube Playlist"
+  QString shortUrl = url;
+  // Cắt bỏ scheme và www
+  shortUrl.remove(QRegularExpression(
+      R"(^https?://(www\.)?)", QRegularExpression::CaseInsensitiveOption));
+  // Giới hạn 50 ký tự
+  if (shortUrl.length() > 50)
+    shortUrl = shortUrl.left(47) + "...";
+  const QString label = shortUrl;
 
   // Lazy-create dialog (non-modal, tồn tại suốt vòng đời MainWindow)
   if (!m_downloadManager)

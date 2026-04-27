@@ -106,8 +106,10 @@ signals:
                         const QString &currentFile);
   /** Download hoàn tất; outputDir là thư mục chứa file đã tải. */
   void downloadFinished(const QString &jobId, const QString &outputDir);
-  /** Download thất bại hoặc bị hủy. */
+  /** Download thất bại (lỗi thật, không phải do user hủy). */
   void downloadError(const QString &jobId, const QString &errorMessage);
+  /** Download bị hủy bởi user. */
+  void downloadCancelled(const QString &jobId);
 
 private slots:
   void onMetadataReadyRead();
@@ -157,6 +159,7 @@ private:
   QProcess *m_downloadProcess = nullptr;
   QQueue<DownloadJob> m_downloadQueue;
   bool m_downloadBusy = false;
-  DownloadJob m_activeDownload;  ///< Job đang chạy
-  QString m_currentDownloadFile; ///< Tên file đang tải (từ stdout)
+  bool m_downloadCancelled = false; ///< true khi job bị hủy bởi user
+  DownloadJob m_activeDownload;     ///< Job đang chạy
+  QString m_currentDownloadFile;    ///< Tên file đang tải (từ stdout)
 };

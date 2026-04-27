@@ -1,6 +1,7 @@
 #include "DownloadManagerDialog.h"
 
 #include <QDesktopServices>
+#include <QFrame>
 #include <QHBoxLayout>
 #include <QScrollArea>
 #include <QStyle>
@@ -10,70 +11,145 @@
 // DownloadJobWidget
 // ─────────────────────────────────────────────────────────────────────────────
 
-DownloadJobWidget::DownloadJobWidget(const QString &jobId, const QString &label,
-                                     QWidget *parent)
+DownloadJobWidget::DownloadJobWidget(const QString &jobId,
+                                     const QString &displayLabel,
+                                     DownloadFormat format, QWidget *parent)
     : QWidget(parent), m_jobId(jobId) {
   setObjectName("jobWidget");
+  setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-  m_titleLabel = new QLabel(label, this);
+  // ── Badge MP3 / MP4 ───────────────────────────────────────────────────
+  m_badgeLabel =
+      new QLabel(format == DownloadFormat::Mp3 ? "MP3" : "MP4", this);
+  m_badgeLabel->setObjectName(format == DownloadFormat::Mp3 ? "badgeMp3"
+                                                            : "badgeMp4");
+  m_badgeLabel->setFixedSize(36, 20);
+  m_badgeLabel->setAlignment(Qt::AlignCenter);
+
+  // ── Title (elided) ────────────────────────────────────────────────────
+  m_titleLabel = new QLabel(displayLabel, this);
   m_titleLabel->setObjectName("jobTitle");
+  m_titleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  // Elide dài → không kéo giãn layout
+  m_titleLabel->setMinimumWidth(0);
+  m_titleLabel->setMaximumWidth(9999);
 
-  m_fileLabel = new QLabel("Đang chuẩn bị...", this);
+  // ── Action button (fixed width, không bị đẩy ra ngoài) ───────────────
+  m_actionBtn = new QPushButton("Hủy", this);
+  m_actionBtn->setObjectName("cancelBtn");
+  m_actionBtn->setFixedSize(80, 28);
+  m_actionBtn->setCursor(Qt::PointingHandCursor);
+
+  // ── File label ────────────────────────────────────────────────────────
+  m_fileLabel = new QLabel("Đang chờ trong hàng đợi...", this);
   m_fileLabel->setObjectName("jobFile");
-  m_fileLabel->setWordWrap(false);
+  m_fileLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+  m_fileLabel->setMinimumWidth(0);
 
+  // ── Meta: speed + ETA ─────────────────────────────────────────────────
+  m_metaLabel = new QLabel(this);
+  m_metaLabel->setObjectName("jobMeta");
+  m_metaLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+  m_metaLabel->setFixedWidth(160);
+
+  // ── Progress bar ──────────────────────────────────────────────────────
   m_progressBar = new QProgressBar(this);
   m_progressBar->setRange(0, 100);
   m_progressBar->setValue(0);
-  m_progressBar->setTextVisible(true);
-  m_progressBar->setFormat("%p%");
+  m_progressBar->setTextVisible(false);
+  m_progressBar->setFixedHeight(6);
+  m_progressBar->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 
-  m_statusLabel = new QLabel(this);
-  m_statusLabel->setObjectName("jobStatus");
-  m_statusLabel->hide();
+  // ── Layouts ───────────────────────────────────────────────────────────
+  // Row 1: badge + title + button
+  auto *row1 = new QHBoxLayout;
+  row1->setSpacing(8);
+  row1->setContentsMargins(0, 0, 0, 0);
+  row1->addWidget(m_badgeLabel);
+  row1->addWidget(m_titleLabel, 1); // stretch=1 → chiếm hết không gian còn lại
+  row1->addWidget(m_actionBtn);
 
-  m_actionBtn = new QPushButton("Hủy", this);
-  m_actionBtn->setObjectName("cancelBtn");
-  m_actionBtn->setFixedWidth(100);
-
-  auto *topRow = new QHBoxLayout;
-  topRow->addWidget(m_titleLabel, 1);
-  topRow->addWidget(m_actionBtn);
+  // Row 2: file label + meta
+  auto *row2 = new QHBoxLayout;
+  row2->setSpacing(8);
+  row2->setContentsMargins(0, 0, 0, 0);
+  row2->addWidget(m_fileLabel, 1);
+  row2->addWidget(m_metaLabel);
 
   auto *layout = new QVBoxLayout(this);
-  layout->setContentsMargins(12, 10, 12, 10);
-  layout->setSpacing(4);
-  layout->addLayout(topRow);
-  layout->addWidget(m_fileLabel);
+  layout->setContentsMargins(14, 10, 14, 12);
+  layout->setSpacing(6);
+  layout->addLayout(row1);
+  layout->addLayout(row2);
   layout->addWidget(m_progressBar);
-  layout->addWidget(m_statusLabel);
 
+  // ── Connections ───────────────────────────────────────────────────────
   connect(m_actionBtn, &QPushButton::clicked, this, [this]() {
-    if (m_outputDir.isEmpty()) {
-      emit cancelRequested(m_jobId);
-    } else {
+    if (m_state == JobState::Done) {
       QDesktopServices::openUrl(QUrl::fromLocalFile(m_outputDir));
+    } else if (m_state == JobState::Downloading ||
+               m_state == JobState::Queued) {
+      emit cancelRequested(m_jobId);
     }
   });
 }
 
-void DownloadJobWidget::setProgress(int percent, const QString &currentFile) {
-  m_progressBar->setValue(percent);
-  if (!currentFile.isEmpty()) {
-    // Truncate tên file dài
-    const QString display =
-        currentFile.length() > 60 ? "..." + currentFile.right(57) : currentFile;
-    m_fileLabel->setText(display);
+void DownloadJobWidget::setProgress(int percent, const QString &currentFile,
+                                    const QString &speed, const QString &eta,
+                                    const QString &phaseText) {
+  m_state = JobState::Downloading;
+
+  // Giai đoạn hậu kỳ (convert, embed...) — progress bar indeterminate
+  if (percent < 0) {
+    m_progressBar->setRange(0, 0); // indeterminate animation
+    m_fileLabel->setObjectName("jobFilePhase");
+    m_fileLabel->style()->unpolish(m_fileLabel);
+    m_fileLabel->style()->polish(m_fileLabel);
+    m_fileLabel->setText("⚙  " + phaseText);
+    m_metaLabel->clear();
+    return;
   }
+
+  // Đảm bảo progress bar về dạng normal nếu trước đó là indeterminate
+  if (m_progressBar->maximum() == 0) {
+    m_progressBar->setRange(0, 100);
+    m_fileLabel->setObjectName("jobFile");
+    m_fileLabel->style()->unpolish(m_fileLabel);
+    m_fileLabel->style()->polish(m_fileLabel);
+  }
+
+  m_progressBar->setValue(percent);
+
+  if (!currentFile.isEmpty()) {
+    const QFontMetrics fm(m_fileLabel->font());
+    const int maxW = m_fileLabel->width() > 0 ? m_fileLabel->width() : 300;
+    m_fileLabel->setText(
+        fm.elidedText("▸ " + currentFile, Qt::ElideMiddle, maxW));
+  }
+
+  // Speed + ETA
+  QString meta;
+  if (!speed.isEmpty())
+    meta += speed;
+  if (!eta.isEmpty())
+    meta += (meta.isEmpty() ? QString{} : QStringLiteral("  ")) + "ETA " + eta;
+  m_metaLabel->setText(meta);
 }
 
 void DownloadJobWidget::setFinished(const QString &outputDir) {
+  m_state = JobState::Done;
   m_outputDir = outputDir;
   m_progressBar->setValue(100);
-  m_fileLabel->setText("Hoàn tất ✓");
+  m_progressBar->setObjectName("progressDone");
+  m_progressBar->style()->unpolish(m_progressBar);
+  m_progressBar->style()->polish(m_progressBar);
+
+  m_fileLabel->setText("✓  Hoàn tất");
   m_fileLabel->setObjectName("jobFileDone");
   m_fileLabel->style()->unpolish(m_fileLabel);
   m_fileLabel->style()->polish(m_fileLabel);
+
+  m_metaLabel->clear();
 
   m_actionBtn->setText("Mở thư mục");
   m_actionBtn->setObjectName("openBtn");
@@ -81,15 +157,50 @@ void DownloadJobWidget::setFinished(const QString &outputDir) {
   m_actionBtn->style()->polish(m_actionBtn);
 }
 
-void DownloadJobWidget::setError(const QString &message) {
-  m_progressBar->setValue(0);
-  m_fileLabel->setText("Lỗi: " + message.left(80));
+void DownloadJobWidget::setCancelled() {
+  m_state = JobState::Cancelled;
+  m_progressBar->setObjectName("progressCancelled");
+  m_progressBar->style()->unpolish(m_progressBar);
+  m_progressBar->style()->polish(m_progressBar);
+
+  m_fileLabel->setText("⊘  Đã hủy");
+  m_fileLabel->setObjectName("jobFileCancelled");
+  m_fileLabel->style()->unpolish(m_fileLabel);
+  m_fileLabel->style()->polish(m_fileLabel);
+
+  m_metaLabel->clear();
+  m_actionBtn->setEnabled(false);
+  m_actionBtn->setText("Đã hủy");
+  m_actionBtn->setObjectName("doneBtn");
+  m_actionBtn->style()->unpolish(m_actionBtn);
+  m_actionBtn->style()->polish(m_actionBtn);
+}
+
+void DownloadJobWidget::setFailed(const QString &message) {
+  m_state = JobState::Failed;
+  m_progressBar->setObjectName("progressFailed");
+  m_progressBar->style()->unpolish(m_progressBar);
+  m_progressBar->style()->polish(m_progressBar);
+
+  const QFontMetrics fm(m_fileLabel->font());
+  const int maxW = m_fileLabel->width() > 0 ? m_fileLabel->width() : 300;
+  m_fileLabel->setText(fm.elidedText("✕  " + message, Qt::ElideRight, maxW));
   m_fileLabel->setObjectName("jobFileError");
   m_fileLabel->style()->unpolish(m_fileLabel);
   m_fileLabel->style()->polish(m_fileLabel);
 
+  m_metaLabel->clear();
   m_actionBtn->setEnabled(false);
-  m_actionBtn->setText("Thất bại");
+  m_actionBtn->setText("Lỗi");
+  m_actionBtn->setObjectName("doneBtn");
+  m_actionBtn->style()->unpolish(m_actionBtn);
+  m_actionBtn->style()->polish(m_actionBtn);
+}
+
+void DownloadJobWidget::setQueued() {
+  m_state = JobState::Queued;
+  m_fileLabel->setText("Đang chờ trong hàng đợi...");
+  m_metaLabel->clear();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,22 +211,47 @@ DownloadManagerDialog::DownloadManagerDialog(YtDlpService *service,
                                              QWidget *parent)
     : QDialog(parent), m_service(service) {
   setWindowTitle("Download Manager");
-  setMinimumSize(520, 300);
-  resize(560, 400);
-  // Non-modal: user vẫn dùng được app trong khi download
+  setMinimumWidth(460);
+  setMinimumHeight(120);
+  setMaximumHeight(600);
+  resize(540, 120); // bắt đầu nhỏ, tự mở rộng khi thêm job
   setWindowFlags(windowFlags() | Qt::Window);
 
-  // ── Inner list container ───────────────────────────────────────────────
+  // ── Header bar ────────────────────────────────────────────────────────
+  auto *headerWidget = new QWidget(this);
+  headerWidget->setObjectName("headerBar");
+  headerWidget->setFixedHeight(40);
+
+  m_headerLabel = new QLabel("Chưa có download nào", headerWidget);
+  m_headerLabel->setObjectName("headerLabel");
+
+  auto *headerLayout = new QHBoxLayout(headerWidget);
+  headerLayout->setContentsMargins(14, 0, 14, 0);
+  headerLayout->addWidget(m_headerLabel);
+  headerLayout->addStretch();
+
+  // ── Separator ─────────────────────────────────────────────────────────
+  auto *separator = new QFrame(this);
+  separator->setFrameShape(QFrame::HLine);
+  separator->setObjectName("separator");
+
+  // ── List container ────────────────────────────────────────────────────
   m_listContainer = new QWidget;
+  m_listContainer->setSizePolicy(QSizePolicy::Expanding,
+                                 QSizePolicy::Preferred);
+
   m_listLayout = new QVBoxLayout(m_listContainer);
   m_listLayout->setContentsMargins(0, 0, 0, 0);
-  m_listLayout->setSpacing(1);
-  m_listLayout->addStretch();
+  m_listLayout->setSpacing(0);
+  m_listLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
 
-  m_emptyLabel = new QLabel("Chưa có download nào.", m_listContainer);
+  m_emptyLabel =
+      new QLabel("Chưa có download nào.\nNhấn Download MP3 / MP4 để bắt đầu.",
+                 m_listContainer);
   m_emptyLabel->setObjectName("emptyLabel");
   m_emptyLabel->setAlignment(Qt::AlignCenter);
-  m_listLayout->insertWidget(0, m_emptyLabel);
+  m_emptyLabel->setWordWrap(true);
+  m_listLayout->addWidget(m_emptyLabel);
 
   auto *scrollArea = new QScrollArea(this);
   scrollArea->setWidget(m_listContainer);
@@ -123,91 +259,174 @@ DownloadManagerDialog::DownloadManagerDialog(YtDlpService *service,
   scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
   scrollArea->setFrameShape(QFrame::NoFrame);
 
+  // ── Main layout ───────────────────────────────────────────────────────
   auto *mainLayout = new QVBoxLayout(this);
   mainLayout->setContentsMargins(0, 0, 0, 0);
-  mainLayout->addWidget(scrollArea);
+  mainLayout->setSpacing(0);
+  mainLayout->addWidget(headerWidget);
+  mainLayout->addWidget(separator);
+  mainLayout->addWidget(scrollArea, 1);
 
-  // ── Style ──────────────────────────────────────────────────────────────
+  // ── Stylesheet ────────────────────────────────────────────────────────
   setStyleSheet(R"(
-    QDialog, QWidget {
-        background-color: #1a1a1a;
+    QDialog {
+        background-color: #161616;
         color: #e0e0e0;
     }
-    QWidget#jobWidget {
-        background: #242424;
-        border-bottom: 1px solid #2e2e2e;
+    QWidget {
+        background-color: #161616;
+        color: #e0e0e0;
     }
+    QWidget#headerBar {
+        background: #1e1e1e;
+    }
+    QLabel#headerLabel {
+        font-size: 12px;
+        font-weight: bold;
+        color: #888888;
+        letter-spacing: 0.5px;
+    }
+    QFrame#separator {
+        color: #2a2a2a;
+        background: #2a2a2a;
+        max-height: 1px;
+    }
+
+    /* ── Job widget ── */
+    QWidget#jobWidget {
+        background: #1e1e1e;
+        border-bottom: 1px solid #252525;
+    }
+    QWidget#jobWidget:hover {
+        background: #222222;
+    }
+
+    /* Badge */
+    QLabel#badgeMp3 {
+        background: #7c3a00;
+        color: #f0a060;
+        font-size: 10px;
+        font-weight: bold;
+        border-radius: 3px;
+    }
+    QLabel#badgeMp4 {
+        background: #003a6e;
+        color: #60a8f0;
+        font-size: 10px;
+        font-weight: bold;
+        border-radius: 3px;
+    }
+
+    /* Title */
     QLabel#jobTitle {
         font-size: 13px;
         font-weight: bold;
-        color: #e0e0e0;
+        color: #d8d8d8;
     }
+
+    /* File / status labels */
     QLabel#jobFile {
         font-size: 11px;
-        color: #888888;
+        color: #666666;
     }
     QLabel#jobFileDone {
         font-size: 11px;
         color: #1db954;
     }
+    QLabel#jobFileCancelled {
+        font-size: 11px;
+        color: #888888;
+    }
     QLabel#jobFileError {
         font-size: 11px;
-        color: #ff6b6b;
+        color: #e05555;
     }
-    QLabel#emptyLabel {
+    QLabel#jobFilePhase {
+        font-size: 11px;
+        color: #d4a017;
+    }
+
+    /* Meta (speed/ETA) */
+    QLabel#jobMeta {
+        font-size: 10px;
         color: #555555;
-        font-size: 13px;
-        padding: 40px;
     }
+
+    /* Progress bars */
     QProgressBar {
-        background: #2e2e2e;
+        background: #2a2a2a;
         border: none;
         border-radius: 3px;
-        height: 6px;
-        text-align: center;
-        font-size: 10px;
-        color: #aaaaaa;
     }
     QProgressBar::chunk {
         background: #1db954;
         border-radius: 3px;
     }
+    QProgressBar#progressDone::chunk {
+        background: #1db954;
+    }
+    QProgressBar#progressCancelled::chunk {
+        background: #555555;
+    }
+    QProgressBar#progressFailed::chunk {
+        background: #e05555;
+    }
+
+    /* Buttons */
     QPushButton#cancelBtn {
-        background: #2a2a2a;
-        color: #ff6b6b;
-        border: 1px solid #3a3a3a;
+        background: transparent;
+        color: #888888;
+        border: 1px solid #333333;
         border-radius: 4px;
-        padding: 4px 10px;
         font-size: 11px;
     }
     QPushButton#cancelBtn:hover {
-        background: #3a1a1a;
+        color: #ff6b6b;
         border-color: #ff6b6b;
+        background: #2a1515;
     }
     QPushButton#openBtn {
-        background: #2a2a2a;
+        background: transparent;
         color: #1db954;
         border: 1px solid #1db954;
         border-radius: 4px;
-        padding: 4px 10px;
         font-size: 11px;
     }
     QPushButton#openBtn:hover {
         background: #0d2a1a;
     }
+    QPushButton#doneBtn {
+        background: transparent;
+        color: #444444;
+        border: 1px solid #2a2a2a;
+        border-radius: 4px;
+        font-size: 11px;
+    }
+
+    /* Empty state */
+    QLabel#emptyLabel {
+        color: #444444;
+        font-size: 13px;
+        padding: 48px 24px;
+        line-height: 1.6;
+    }
+
+    /* Scrollbar */
     QScrollBar:vertical {
-        background: #1a1a1a;
-        width: 6px;
-        border-radius: 3px;
+        background: #161616;
+        width: 5px;
+        border-radius: 2px;
     }
     QScrollBar::handle:vertical {
-        background: #3a3a3a;
-        border-radius: 3px;
-        min-height: 20px;
+        background: #333333;
+        border-radius: 2px;
+        min-height: 24px;
     }
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-        height: 0;
+    QScrollBar::handle:vertical:hover {
+        background: #555555;
     }
+    QScrollBar::add-line:vertical,
+    QScrollBar::sub-line:vertical { height: 0; }
   )");
 
   // ── Connect service signals ────────────────────────────────────────────
@@ -217,22 +436,49 @@ DownloadManagerDialog::DownloadManagerDialog(YtDlpService *service,
           &DownloadManagerDialog::onDownloadFinished);
   connect(m_service, &YtDlpService::downloadError, this,
           &DownloadManagerDialog::onDownloadError);
+  connect(m_service, &YtDlpService::downloadCancelled, this,
+          &DownloadManagerDialog::onDownloadCancelled);
 }
 
 void DownloadManagerDialog::addJob(const DownloadJob &job,
                                    const QString &displayLabel) {
   m_emptyLabel->hide();
+  ++m_totalJobs;
+  ++m_activeJobs;
 
-  auto *w = new DownloadJobWidget(job.jobId, displayLabel, m_listContainer);
+  auto *w = new DownloadJobWidget(job.jobId, displayLabel, job.format,
+                                  m_listContainer);
   connect(w, &DownloadJobWidget::cancelRequested, this,
           &DownloadManagerDialog::onCancelRequested);
 
-  // Chèn trước stretch ở cuối
-  m_listLayout->insertWidget(m_listLayout->count() - 1, w);
+  m_listLayout->addWidget(w);
   m_widgets.insert(job.jobId, w);
 
-  // Bắt đầu download
+  updateHeader();
+
+  // Tự điều chỉnh chiều cao theo số job (tối đa 600px)
+  adjustSize();
+
   m_service->downloadMedia(job);
+}
+
+// ── Private helpers
+// ───────────────────────────────────────────────────────────
+
+void DownloadManagerDialog::updateHeader() {
+  if (m_totalJobs == 0) {
+    m_headerLabel->setText("Chưa có download nào");
+    return;
+  }
+  QStringList parts;
+  if (m_activeJobs > 0)
+    parts << QString("%1 đang tải").arg(m_activeJobs);
+  if (m_finishedJobs > 0)
+    parts << QString("%1 hoàn tất").arg(m_finishedJobs);
+  const int other = m_totalJobs - m_activeJobs - m_finishedJobs;
+  if (other > 0)
+    parts << QString("%1 khác").arg(other);
+  m_headerLabel->setText(parts.join("  •  "));
 }
 
 // ── Slots
@@ -240,21 +486,55 @@ void DownloadManagerDialog::addJob(const DownloadJob &job,
 
 void DownloadManagerDialog::onDownloadProgress(const QString &jobId,
                                                int percent,
-                                               const QString &currentFile) {
-  if (auto *w = m_widgets.value(jobId, nullptr))
-    w->setProgress(percent, currentFile);
+                                               const QString &payload) {
+  auto *w = m_widgets.value(jobId, nullptr);
+  if (!w)
+    return;
+
+  // Payload format: "filename\x1Fspeed\x1Feta\x1FphaseText"
+  // percent == -1 → đang ở giai đoạn hậu kỳ (convert/embed)
+  const QStringList parts = payload.split('\x1F');
+  const QString fileName = parts.value(0);
+  const QString speed = parts.value(1);
+  const QString eta = parts.value(2);
+  const QString phaseText = parts.value(3);
+  w->setProgress(percent, fileName, speed, eta, phaseText);
 }
 
 void DownloadManagerDialog::onDownloadFinished(const QString &jobId,
                                                const QString &outputDir) {
-  if (auto *w = m_widgets.value(jobId, nullptr))
-    w->setFinished(outputDir);
+  auto *w = m_widgets.value(jobId, nullptr);
+  if (!w)
+    return;
+  if (w->state() != JobState::Done) {
+    --m_activeJobs;
+    ++m_finishedJobs;
+    updateHeader();
+  }
+  w->setFinished(outputDir);
 }
 
 void DownloadManagerDialog::onDownloadError(const QString &jobId,
                                             const QString &errorMessage) {
-  if (auto *w = m_widgets.value(jobId, nullptr))
-    w->setError(errorMessage);
+  auto *w = m_widgets.value(jobId, nullptr);
+  if (!w)
+    return;
+  if (w->state() == JobState::Downloading || w->state() == JobState::Queued) {
+    --m_activeJobs;
+    updateHeader();
+  }
+  w->setFailed(errorMessage);
+}
+
+void DownloadManagerDialog::onDownloadCancelled(const QString &jobId) {
+  auto *w = m_widgets.value(jobId, nullptr);
+  if (!w)
+    return;
+  if (w->state() == JobState::Downloading || w->state() == JobState::Queued) {
+    --m_activeJobs;
+    updateHeader();
+  }
+  w->setCancelled();
 }
 
 void DownloadManagerDialog::onCancelRequested(const QString &jobId) {
