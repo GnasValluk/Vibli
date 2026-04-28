@@ -22,7 +22,9 @@ class MediaCache : public QObject {
   Q_OBJECT
 
 public:
-  static constexpr int STREAM_URL_TTL_SECONDS = 6 * 3600; // 6 hours
+  // 120 seconds — YouTube URLs expire ~2min server-side
+  // Reactive strategy: only refresh on demux error, not proactively
+  static constexpr int STREAM_URL_TTL_SECONDS = 120;
 
   explicit MediaCache(QObject *parent = nullptr);
   ~MediaCache() override = default;

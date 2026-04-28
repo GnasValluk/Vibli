@@ -1,7 +1,9 @@
 #include <QApplication>
+#include <QDir>
 #include <QNetworkAccessManager>
 #include <QPixmapCache>
 #include <QSet>
+#include <QStandardPaths>
 #include <QStyleFactory>
 #include <QTimer>
 
@@ -13,6 +15,7 @@
 #include "core/PlaylistImporter.h"
 #include "core/PlaylistManager.h"
 #include "core/PlaylistPersistence.h"
+#include "core/ProgressiveDownloader.h"
 #include "core/ThumbnailCache.h"
 #include "core/YtDlpService.h"
 #include "tray/TrayManager.h"
@@ -72,6 +75,19 @@ int main(int argc, char *argv[]) {
   // Attach MediaCache to YtDlpService for persistent stream URL cache
   ytDlpService->setMediaCache(mediaCache);
 
+  // ── Cleanup leftover streaming files from previous session ──────────
+  const QString streamDir =
+      QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
+      "/VIBLI/streaming";
+  if (QDir(streamDir).exists()) {
+    QDir(streamDir).removeRecursively();
+    VLOG_INFO("App",
+              "Cleaned up leftover streaming files from previous session");
+  }
+
+  // ── Progressive Download for YouTube streaming ──────────────────────
+  auto *progressiveDownloader = new ProgressiveDownloader(ytDlpService, &app);
+
   // ── Initialize UI ────────────────────────────────────────────────────
   auto *miniPlayer = new MiniPlayer(audioPlayer, playlistMgr, thumbCache);
   auto *mainWindow = new MainWindow(audioPlayer, playlistMgr, ytDlpService,
@@ -79,120 +95,77 @@ int main(int argc, char *argv[]) {
   auto *trayManager = new TrayManager(&app);
 
   // ── Coordinator: play YouTube tracks ─────────────────────────────────
-  // Retry state: { videoId → retry count }
-  using RetryMap = QMap<QString, int>;
-  auto *retryCount = new RetryMap();
-
-  // Debounce guard: ignore error events within 2s after a retry has started
-  // Use QSet to track videoIds currently in cooldown
-  auto *retryCooldown = new QSet<QString>();
-  auto *cooldownTimer = new QTimer(&app);
-  cooldownTimer->setSingleShot(false);
-  cooldownTimer->setInterval(2000); // 2s cooldown per retry
-
   // On currentTrackChanged: resolve stream URL + pre-fetch next track
-  QObject::connect(playlistMgr, &PlaylistManager::currentTrackChanged, &app,
-                   [audioPlayer, ytDlpService, playlistMgr, retryCount,
-                    retryCooldown](int index, const Track &track) {
-                     // Reset retry state on track change
-                     retryCount->clear();
-                     retryCooldown->clear();
-
-                     if (track.isYouTube) {
-                       ytDlpService->resolveStreamUrl(track.videoId);
-
-                       // Pre-fetch next track in background
-                       const int nextIdx = index + 1;
-                       if (nextIdx < playlistMgr->count()) {
-                         const Track next = playlistMgr->trackAt(nextIdx);
-                         if (next.isYouTube && !next.videoId.isEmpty())
-                           ytDlpService->prefetchStreamUrl(next.videoId);
-                       }
-                     } else if (track.url.isValid()) {
-                       audioPlayer->play(track.url);
-                     }
-                   });
-
-  // On streamUrlReady → play if this is the track we're waiting for
-  QObject::connect(ytDlpService, &YtDlpService::streamUrlReady, &app,
-                   [audioPlayer, playlistMgr, retryCount,
-                    retryCooldown](const QString &videoId, const QUrl &url) {
-                     if (playlistMgr->currentTrack().videoId != videoId)
-                       return; // prefetch for a different track, ignore
-
-                     retryCount->remove(videoId);
-                     retryCooldown->remove(
-                         videoId); // cooldown ends when new URL arrives
-                     audioPlayer->play(url);
-                   });
-
-  // ── Recoverable error (Demuxing failed, 403, network) → invalidate + retry
   QObject::connect(
-      audioPlayer, &AudioPlayer::recoverableErrorOccurred, &app,
-      [playlistMgr, ytDlpService, retryCount,
-       retryCooldown](const QString &errorMsg) {
-        const Track current = playlistMgr->currentTrack();
-        if (!current.isYouTube || current.videoId.isEmpty())
-          return;
+      playlistMgr, &PlaylistManager::currentTrackChanged, &app,
+      [audioPlayer, ytDlpService, playlistMgr, progressiveDownloader,
+       miniPlayer](int index, const Track &track) {
+        // Cancel previous download
+        progressiveDownloader->cancel();
 
-        const QString videoId = current.videoId;
+        if (track.isYouTube) {
+          // Use progressive download for YouTube tracks
+          progressiveDownloader->startDownload(track.videoId, track.durationMs);
 
-        // Debounce: if already in cooldown → ignore redundant error events
-        if (retryCooldown->contains(videoId)) {
-          VLOG_DEBUG("Coordinator",
-                     "Debounce error [" + videoId + "] (in cooldown)");
-          return;
-        }
-
-        const int count = retryCount->value(videoId, 0);
-        VLOG_WARN("Coordinator", QString("Recoverable error [%1] retry=%2: %3")
-                                     .arg(videoId)
-                                     .arg(count)
-                                     .arg(errorMsg));
-
-        if (count < 2) {
-          retryCount->insert(videoId, count + 1);
-          retryCooldown->insert(videoId); // start cooldown
-
-          // Invalidate cache before retry to avoid replaying the bad URL
-          // (don't call stop() as it would trigger playbackStopped)
-          ytDlpService->invalidateStreamCache(videoId);
-          // Small delay to let QMediaPlayer flush its error queue before
-          // resolving
-          QTimer::singleShot(300, ytDlpService, [ytDlpService, videoId]() {
-            ytDlpService->resolveStreamUrl(videoId);
-          });
-        } else {
-          retryCount->remove(videoId);
-          retryCooldown->remove(videoId);
-          VLOG_WARN("Coordinator",
-                    "Retries exhausted, skipping track: " + videoId);
-          if (playlistMgr->hasNext())
-            playlistMgr->next();
-        }
-      });
-
-  // ── Stream resolve error → retry or skip
-  QObject::connect(
-      ytDlpService, &YtDlpService::streamErrorOccurred, &app,
-      [playlistMgr, ytDlpService, retryCount](const QString &videoId,
-                                              const QString &msg) {
-        VLOG_WARN("Coordinator", "Stream error [" + videoId + "]: " + msg);
-        const int count = retryCount->value(videoId, 0);
-        if (count < 1) {
-          retryCount->insert(videoId, count + 1);
-          VLOG_INFO("Coordinator", "Auto-retry attempt 1 for: " + videoId);
-          ytDlpService->invalidateStreamCache(videoId);
-          ytDlpService->resolveStreamUrl(videoId);
-        } else {
-          retryCount->remove(videoId);
-          VLOG_WARN("Coordinator", "Skipping track after retry: " + videoId);
-          if (playlistMgr->currentTrack().videoId == videoId &&
-              playlistMgr->hasNext()) {
-            playlistMgr->next();
+          // Pre-fetch next track in background (keep existing
+          // logic)
+          const int nextIdx = index + 1;
+          if (nextIdx < playlistMgr->count()) {
+            const Track next = playlistMgr->trackAt(nextIdx);
+            if (next.isYouTube && !next.videoId.isEmpty())
+              ytDlpService->prefetchStreamUrl(next.videoId);
           }
+        } else if (track.url.isValid()) {
+          // Play local files directly
+          audioPlayer->play(track.url);
+          // Hide buffer overlay for local tracks
+          miniPlayer->updateBufferProgress(0.0f);
         }
       });
+
+  // Connect initialBufferReady signal to start playback
+  QObject::connect(
+      progressiveDownloader, &ProgressiveDownloader::initialBufferReady, &app,
+      [audioPlayer](const QString &tempFilePath) {
+        VLOG_INFO("Coordinator", "Initial buffer ready, starting playback");
+        audioPlayer->play(QUrl::fromLocalFile(tempFilePath));
+      });
+
+  // Connect bufferProgressChanged signal to update UI
+  QObject::connect(progressiveDownloader,
+                   &ProgressiveDownloader::bufferProgressChanged, &app,
+                   [miniPlayer](qint64 bytesDownloaded, qint64 totalBytes) {
+                     float progress = bytesDownloaded / (float)totalBytes;
+                     miniPlayer->updateBufferProgress(progress);
+                   });
+
+  // Connect downloadComplete signal
+  QObject::connect(
+      progressiveDownloader, &ProgressiveDownloader::downloadComplete, &app,
+      []() { VLOG_INFO("Coordinator", "Progressive download complete"); });
+
+  // Connect downloadFailed signal to skip to next track
+  QObject::connect(
+      progressiveDownloader, &ProgressiveDownloader::downloadFailed, &app,
+      [playlistMgr](const QString &errorMessage) {
+        VLOG_ERROR("Coordinator", "Download failed: " + errorMessage);
+        if (playlistMgr->hasNext()) {
+          playlistMgr->next();
+        }
+      });
+
+  // Cleanup on app exit
+  QObject::connect(&app, &QApplication::aboutToQuit, progressiveDownloader,
+                   [progressiveDownloader]() {
+                     progressiveDownloader->cancel();
+                     // Delete all files in streaming directory
+                     const QString streamDir =
+                         QStandardPaths::writableLocation(
+                             QStandardPaths::TempLocation) +
+                         "/VIBLI/streaming";
+                     QDir(streamDir).removeRecursively();
+                     VLOG_INFO("Coordinator", "Cleaned up streaming directory");
+                   });
 
   // ── Thumbnail → MainWindow / MiniPlayer ─────────────────────────────
   QObject::connect(importer, &PlaylistImporter::thumbnailReady, mainWindow,

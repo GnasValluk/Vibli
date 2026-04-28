@@ -80,7 +80,7 @@ void MiniPlayer::setupUi() {
   m_titleLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 
   // ── Seek slider ───────────────────────────────────────────────────────
-  m_seekSlider = new QSlider(Qt::Horizontal, this);
+  m_seekSlider = new BufferedSeekSlider(Qt::Horizontal, this);
   m_seekSlider->setRange(0, 1000);
   m_seekSlider->setObjectName("seekSlider");
 
@@ -416,4 +416,10 @@ void MiniPlayer::onRepeatClicked() {
 QString MiniPlayer::formatTime(qint64 ms) const {
   qint64 s = ms / 1000;
   return QString("%1:%2").arg(s / 60).arg(s % 60, 2, 10, QChar('0'));
+}
+
+void MiniPlayer::updateBufferProgress(float progress) {
+  if (m_seekSlider) {
+    m_seekSlider->setBufferProgress(progress);
+  }
 }

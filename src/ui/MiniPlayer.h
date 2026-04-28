@@ -3,6 +3,7 @@
 #include "../core/AudioPlayer.h"
 #include "../core/PlaylistManager.h"
 #include "../core/ThumbnailCache.h"
+#include "BufferedSeekSlider.h"
 #include "OverlayWidget.h"
 
 #include "RoundedImageWidget.h"
@@ -35,6 +36,8 @@ public slots:
   void updateDuration(qint64 durMs);
   /** Called when the thumbnail for videoId is ready in ThumbnailCache. */
   void onThumbnailReady(const QString &videoId);
+  /** Update buffer progress for YouTube tracks (0.0 - 1.0) */
+  void updateBufferProgress(float progress);
 
 private slots:
   void onPlayPauseClicked();
@@ -64,7 +67,7 @@ private:
   QLabel *m_titleLabel;
   QLabel *m_artistLabel;
   QLabel *m_timeLabel;
-  QSlider *m_seekSlider;
+  BufferedSeekSlider *m_seekSlider;
   QPushButton *m_prevBtn;
   QPushButton *m_playPauseBtn;
   QPushButton *m_nextBtn;

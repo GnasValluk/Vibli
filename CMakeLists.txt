@@ -38,10 +38,12 @@ set(SOURCES
     src/core/AudioPlayer.cpp
     src/core/MediaCache.cpp
     src/core/PlaylistManager.cpp
+    src/core/ProgressiveDownloader.cpp
     src/core/ThumbnailCache.cpp
     src/core/YtDlpService.cpp
     src/core/PlaylistImporter.cpp
     src/core/PlaylistPersistence.cpp
+    src/ui/BufferedSeekSlider.cpp
     src/ui/OverlayWidget.cpp
     src/ui/MiniPlayer.cpp
     src/ui/MainWindow.cpp
@@ -59,11 +61,13 @@ set(HEADERS
     src/core/AudioPlayer.h
     src/core/MediaCache.h
     src/core/PlaylistManager.h
+    src/core/ProgressiveDownloader.h
     src/core/ThumbnailCache.h
     src/core/YtDlpService.h
     src/core/PlaylistImporter.h
     src/core/PlaylistPersistence.h
     src/core/LogService.h
+    src/ui/BufferedSeekSlider.h
     src/ui/OverlayWidget.h
     src/ui/MiniPlayer.h
     src/ui/MainWindow.h
