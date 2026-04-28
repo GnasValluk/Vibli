@@ -100,7 +100,10 @@ int main(int argc, char *argv[]) {
       playlistMgr, &PlaylistManager::currentTrackChanged, &app,
       [audioPlayer, ytDlpService, playlistMgr, progressiveDownloader,
        miniPlayer](int index, const Track &track) {
-        // Cancel previous download
+        // Stop current playback and clear QMediaPlayer buffer to free RAM
+        audioPlayer->stop();
+
+        // Cancel previous download (this deletes temp file)
         progressiveDownloader->cancel();
 
         if (track.isYouTube) {
@@ -126,9 +129,18 @@ int main(int argc, char *argv[]) {
   // Connect initialBufferReady signal to start playback
   QObject::connect(
       progressiveDownloader, &ProgressiveDownloader::initialBufferReady, &app,
-      [audioPlayer](const QString &tempFilePath) {
+      [audioPlayer, progressiveDownloader](const QString &tempFilePath) {
         VLOG_INFO("Coordinator", "Initial buffer ready, starting playback");
         audioPlayer->play(QUrl::fromLocalFile(tempFilePath));
+
+        // Delete temp file after a short delay to free disk space
+        // QMediaPlayer will have loaded it into RAM by then
+        QTimer::singleShot(2000, [tempFilePath]() {
+          if (QFile::exists(tempFilePath)) {
+            QFile::remove(tempFilePath);
+            VLOG_DEBUG("Coordinator", "Deleted temp file to free disk space");
+          }
+        });
       });
 
   // Connect bufferProgressChanged signal to update UI
