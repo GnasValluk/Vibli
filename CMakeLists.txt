@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(VIBLI VERSION 1.0.1 LANGUAGES CXX)
+project(VIBLI VERSION 1.0.2 LANGUAGES CXX)
 
 # ── Version header (single source of truth) ───────────────────────────────────
 # Sửa version CHỈ ở dòng project() bên trên — tất cả chỗ khác tự cập nhật
