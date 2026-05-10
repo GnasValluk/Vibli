@@ -10,10 +10,11 @@ PlaylistImportDialog::PlaylistImportDialog(QWidget *parent) : QDialog(parent) {
   setMinimumWidth(520);
 
   // ── Widgets ───────────────────────────────────────────────────────────
-  auto *promptLabel = new QLabel("Enter YouTube Playlist / Video URL:", this);
+  auto *promptLabel = new QLabel("Enter YouTube Playlist or Video URL:", this);
 
   m_urlEdit = new QLineEdit(this);
-  m_urlEdit->setPlaceholderText("https://www.youtube.com/playlist?list=...");
+  m_urlEdit->setPlaceholderText(
+      "https://www.youtube.com/watch?v=... or playlist?list=...");
 
   m_errorLabel = new QLabel(this);
   m_errorLabel->setObjectName("errorLabel");

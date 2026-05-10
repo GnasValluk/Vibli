@@ -23,9 +23,16 @@ PlaylistImporter::PlaylistImporter(YtDlpService *ytDlp,
 // ────────────────────────────────────────────────────────────────
 
 bool PlaylistImporter::isValidPlaylistUrl(const QString &url) {
-  static const QRegularExpression re(
+  // Accept both playlist URLs and single video URLs
+  static const QRegularExpression playlistRe(
       R"(^https://(www\.)?youtube\.com/playlist\?.*list=.+)");
-  return re.match(url).hasMatch();
+  static const QRegularExpression videoRe(
+      R"(^https://(www\.)?youtube\.com/watch\?.*v=[A-Za-z0-9_-]{11})");
+  static const QRegularExpression shortRe(
+      R"(^https://youtu\.be/[A-Za-z0-9_-]{11})");
+
+  return playlistRe.match(url).hasMatch() || videoRe.match(url).hasMatch() ||
+         shortRe.match(url).hasMatch();
 }
 
 QString PlaylistImporter::validationErrorMessage(const QString &url) {
@@ -33,17 +40,36 @@ QString PlaylistImporter::validationErrorMessage(const QString &url) {
     return "URL must not be empty.";
   if (!url.startsWith("https://"))
     return "URL must start with https://.";
-  if (!url.contains("youtube.com"))
+  if (!url.contains("youtube.com") && !url.contains("youtu.be"))
     return "URL must be a YouTube address.";
-  if (!url.contains("/playlist"))
-    return "URL must point to a YouTube playlist.";
-  if (!url.contains("list="))
-    return "URL must contain the list= parameter.";
-  const int idx = url.indexOf("list=");
-  if (url.mid(idx + 5).split('&').first().isEmpty())
-    return "Playlist ID (list=) must not be empty.";
-  return "Invalid URL. Expected format: "
-         "https://www.youtube.com/playlist?list=<ID>";
+
+  // Check if it's a valid playlist or video URL
+  if (url.contains("/playlist")) {
+    if (!url.contains("list="))
+      return "Playlist URL must contain the list= parameter.";
+    const int idx = url.indexOf("list=");
+    if (url.mid(idx + 5).split('&').first().isEmpty())
+      return "Playlist ID (list=) must not be empty.";
+  } else if (url.contains("/watch")) {
+    if (!url.contains("v="))
+      return "Video URL must contain the v= parameter.";
+    const int idx = url.indexOf("v=");
+    const QString videoId = url.mid(idx + 2).split('&').first();
+    if (videoId.length() != 11)
+      return "Video ID must be 11 characters long.";
+  } else if (url.contains("youtu.be/")) {
+    const int idx = url.indexOf("youtu.be/");
+    const QString videoId = url.mid(idx + 9).split('?').first();
+    if (videoId.length() != 11)
+      return "Video ID must be 11 characters long.";
+  } else {
+    return "URL must be a YouTube playlist or video link.";
+  }
+
+  return "Invalid URL. Expected format:\n"
+         "Playlist: https://www.youtube.com/playlist?list=<ID>\n"
+         "Video: https://www.youtube.com/watch?v=<ID>\n"
+         "Short: https://youtu.be/<ID>";
 }
 
 // ── Public API

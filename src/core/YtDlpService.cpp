@@ -266,11 +266,15 @@ void YtDlpService::startDownloadProcess(const DownloadJob &job) {
 
   QStringList args;
   args << "--ffmpeg-location" << ffmpegDir() << "--no-warnings"
-       << "--newline"         // per-line progress
-       << "--no-part"         // no .part files
-       << "--embed-thumbnail" // embed thumbnail into file
-       << "--embed-metadata"  // embed title, artist, date...
-       << "--add-metadata"    // add extra metadata
+       << "--newline"                     // per-line progress
+       << "--no-part"                     // no .part files
+       << "--embed-thumbnail"             // embed thumbnail into file
+       << "--embed-metadata"              // embed title, artist, date...
+       << "--add-metadata"                // add extra metadata
+       << "--concurrent-fragments" << "4" // parallel fragment downloads
+       << "--buffer-size" << "16K"        // optimize buffer size
+       << "--retries" << "3"              // retry on transient errors
+       << "--fragment-retries" << "3"     // retry fragment downloads
        << "-o" << (job.outputDir + "/%(title)s.%(ext)s");
 
   if (job.format == DownloadFormat::Mp3) {
