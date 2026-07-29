@@ -16,6 +16,17 @@
 /** Download format for media files. */
 enum class DownloadFormat { Mp3, Mp4 };
 
+/** Video quality / resolution for MP4 downloads. */
+enum class VideoQuality {
+  Best,    ///< Best available (no limit)
+  P2160,   ///< 2160p (4K)
+  P1440,   ///< 1440p (2K)
+  P1080,   ///< 1080p (Full HD)
+  P720,    ///< 720p (HD)
+  P480,    ///< 480p (SD)
+  P360,    ///< 360p (lowest)
+};
+
 /**
  * @brief Describes a download job.
  *
@@ -24,6 +35,7 @@ enum class DownloadFormat { Mp3, Mp4 };
 struct DownloadJob {
   QString url; ///< YouTube playlist or video URL
   DownloadFormat format = DownloadFormat::Mp3;
+  VideoQuality quality = VideoQuality::Best; ///< Video quality (MP4 only)
   QString outputDir; ///< Output directory (must exist)
   QString jobId;     ///< UUID created by caller to track progress
 };

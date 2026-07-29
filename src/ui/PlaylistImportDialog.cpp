@@ -41,6 +41,24 @@ PlaylistImportDialog::PlaylistImportDialog(QWidget *parent) : QDialog(parent) {
 
   auto *cancelBtn = new QPushButton("Cancel", this);
 
+  // ── Quality selector (MP4 only) ───────────────────────────────────────
+  auto *qualityLabel = new QLabel("Video Quality:", this);
+  m_qualityCombo = new QComboBox(this);
+  m_qualityCombo->addItem("Best Available", static_cast<int>(VideoQuality::Best));
+  m_qualityCombo->addItem("2160p (4K)", static_cast<int>(VideoQuality::P2160));
+  m_qualityCombo->addItem("1440p (2K)", static_cast<int>(VideoQuality::P1440));
+  m_qualityCombo->addItem("1080p (Full HD)", static_cast<int>(VideoQuality::P1080));
+  m_qualityCombo->addItem("720p (HD)", static_cast<int>(VideoQuality::P720));
+  m_qualityCombo->addItem("480p (SD)", static_cast<int>(VideoQuality::P480));
+  m_qualityCombo->addItem("360p", static_cast<int>(VideoQuality::P360));
+  m_qualityCombo->setCurrentIndex(0);
+  m_qualityCombo->setToolTip("Select video resolution for MP4 download");
+
+  auto *qualityRow = new QHBoxLayout;
+  qualityRow->setSpacing(8);
+  qualityRow->addWidget(qualityLabel);
+  qualityRow->addWidget(m_qualityCombo, 1);
+
   // ── Layout ────────────────────────────────────────────────────────────
   auto *btnLayout = new QHBoxLayout;
   btnLayout->setSpacing(8);
@@ -56,6 +74,7 @@ PlaylistImportDialog::PlaylistImportDialog(QWidget *parent) : QDialog(parent) {
   mainLayout->addWidget(promptLabel);
   mainLayout->addWidget(m_urlEdit);
   mainLayout->addWidget(m_errorLabel);
+  mainLayout->addLayout(qualityRow);
   mainLayout->addLayout(btnLayout);
 
   // ── Style ─────────────────────────────────────────────────────────────
@@ -117,6 +136,34 @@ PlaylistImportDialog::PlaylistImportDialog(QWidget *parent) : QDialog(parent) {
             border-color: #5dade2;
             color: #5dade2;
         }
+        QComboBox {
+            background: #2a2a2a;
+            color: #e0e0e0;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            min-width: 160px;
+        }
+        QComboBox:hover {
+            border-color: #1db954;
+        }
+        QComboBox::drop-down {
+            border: none;
+            width: 20px;
+        }
+        QComboBox::down-arrow {
+            image: none;
+            border: none;
+        }
+        QComboBox QAbstractItemView {
+            background: #2a2a2a;
+            color: #e0e0e0;
+            border: 1px solid #3a3a3a;
+            selection-background-color: #1db954;
+            selection-color: #ffffff;
+            font-size: 12px;
+        }
     )");
 
   // ── Connections ───────────────────────────────────────────────────────
@@ -138,6 +185,11 @@ QString PlaylistImportDialog::playlistUrl() const {
 void PlaylistImportDialog::acceptWith(ImportAction action) {
   m_selectedAction = action;
   accept();
+}
+
+VideoQuality PlaylistImportDialog::selectedQuality() const {
+  return static_cast<VideoQuality>(
+      m_qualityCombo->currentData().toInt());
 }
 
 void PlaylistImportDialog::onUrlChanged(const QString &text) {

@@ -1,9 +1,12 @@
 #pragma once
 
+#include <QComboBox>
 #include <QDialog>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+
+#include "../core/YtDlpService.h"
 
 /**
  * @brief Action selected by the user when closing the dialog.
@@ -35,6 +38,9 @@ public:
    * Accepted). */
   ImportAction selectedAction() const { return m_selectedAction; }
 
+  /** Returns the selected video quality for MP4 downloads. */
+  VideoQuality selectedQuality() const;
+
 private slots:
   void onUrlChanged(const QString &text);
 
@@ -46,6 +52,7 @@ private:
   QPushButton *m_okBtn;
   QPushButton *m_mp3Btn;
   QPushButton *m_mp4Btn;
+  QComboBox *m_qualityCombo;
 
   ImportAction m_selectedAction = ImportAction::ImportPlaylist;
 };

@@ -367,20 +367,22 @@ void MainWindow::onImportYouTube() {
   if (url.isEmpty())
     return;
 
+  const VideoQuality quality = dlg.selectedQuality();
   switch (dlg.selectedAction()) {
   case ImportAction::ImportPlaylist:
     m_importer->importPlaylist(url);
     break;
   case ImportAction::DownloadMp3:
-    startDownload(url, DownloadFormat::Mp3);
+    startDownload(url, DownloadFormat::Mp3, quality);
     break;
   case ImportAction::DownloadMp4:
-    startDownload(url, DownloadFormat::Mp4);
+    startDownload(url, DownloadFormat::Mp4, quality);
     break;
   }
 }
 
-void MainWindow::startDownload(const QString &url, DownloadFormat format) {
+void MainWindow::startDownload(const QString &url, DownloadFormat format,
+                               VideoQuality quality) {
   // Choose output directory
   const QString outputDir = QFileDialog::getExistingDirectory(
       this, "Select Output Folder", QDir::homePath(),
@@ -392,6 +394,7 @@ void MainWindow::startDownload(const QString &url, DownloadFormat format) {
   DownloadJob job;
   job.url = url;
   job.format = format;
+  job.quality = quality;
   job.outputDir = outputDir;
   job.jobId = QString::number(QDateTime::currentMSecsSinceEpoch());
 

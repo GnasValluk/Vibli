@@ -49,7 +49,8 @@ private:
   void applyStyle();
   void scanFolder(const QString &folderPath, QList<Track> &tracks);
   QString formatDuration(qint64 ms) const;
-  void startDownload(const QString &url, DownloadFormat format);
+  void startDownload(const QString &url, DownloadFormat format,
+                     VideoQuality quality = VideoQuality::Best);
 
   AudioPlayer *m_player;
   PlaylistManager *m_playlist;

@@ -252,17 +252,39 @@ void YtDlpService::processNextDownload() {
   startDownloadProcess(m_activeDownload);
 }
 
+static QString mp4FormatForQuality(VideoQuality q) {
+  switch (q) {
+  case VideoQuality::P360:
+    return "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]/best[height<=360]";
+  case VideoQuality::P480:
+    return "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[height<=480]";
+  case VideoQuality::P720:
+    return "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720][ext=mp4]/best[height<=720]";
+  case VideoQuality::P1080:
+    return "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best[height<=1080]";
+  case VideoQuality::P1440:
+    return "bestvideo[height<=1440][ext=mp4]+bestaudio[ext=m4a]/best[height<=1440][ext=mp4]/best[height<=1440]";
+  case VideoQuality::P2160:
+    return "bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160][ext=mp4]/best[height<=2160]";
+  case VideoQuality::Best:
+  default:
+    return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best";
+  }
+}
+
 void YtDlpService::startDownloadProcess(const DownloadJob &job) {
   if (m_downloadProcess->state() != QProcess::NotRunning) {
     m_downloadProcess->kill();
     m_downloadProcess->waitForFinished(1000);
   }
 
+  const QString fmtStr =
+      job.format == DownloadFormat::Mp3
+          ? "mp3"
+          : QString("mp4[%1]").arg(static_cast<int>(job.quality));
   VLOG_INFO("YtDlpService",
             QString("Download [%1] format=%2 → %3")
-                .arg(job.jobId,
-                     job.format == DownloadFormat::Mp3 ? "mp3" : "mp4",
-                     job.outputDir));
+                .arg(job.jobId, fmtStr, job.outputDir));
 
   QStringList args;
   args << "--ffmpeg-location" << ffmpegDir() << "--no-warnings"
@@ -283,9 +305,8 @@ void YtDlpService::startDownloadProcess(const DownloadJob &job) {
          << "--audio-quality" << "0"         // VBR best quality
          << "--convert-thumbnails" << "jpg"; // thumbnail must be jpg for ID3
   } else {
-    // MP4: video + audio, merge into mp4
-    args << "-f"
-         << "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+    // MP4: video + audio with selected quality, merge into mp4
+    args << "-f" << mp4FormatForQuality(job.quality)
          << "--merge-output-format" << "mp4";
   }
 
